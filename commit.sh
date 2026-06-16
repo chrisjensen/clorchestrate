@@ -1,32 +1,47 @@
 #!/usr/bin/env sh
 set -eu
 
-# flock/taskfile: support tasks without a GitHub issue reference
-git add internal/taskfile/taskfile.go internal/taskfile/taskfile_test.go cmd/flock.go
+# worktree-checkout: prune stale registrations and prefer local branches
+git add scripts/worktree-checkout.sh
 git commit -F- <<'EOF'
-flock: support tasks without a GitHub issue reference
+worktree-checkout: prune stale worktrees and check local branches first
 
-Tasks with no issue: line now include an empty IssueNum instead of being
-skipped. The heading regex is relaxed to match ##handle (no space) and
-trim trailing whitespace. flock derives the branch name directly from the
-task handle for issue-less tasks, applying BranchNameFormat when it does
-not contain {issue}. Add tests for the new parse behaviour and heading
-edge cases.
+Run `git worktree prune` before checkout so that a worktree dir deleted
+without `git worktree remove` does not block re-adding it. Also reorder
+the branch-resolution checks to try the local branch before the remote
+tracking ref, so a previously checked-out branch is reattached rather
+than recreated.
 EOF
 
-# reconnect: add --restart to open new sessions for worktrees without one
+# open: support planning prompt for worktree sessions with --extra-context
+git add cmd/open.go cmd/open_test.go
+git commit -F- <<'EOF'
+open: support planning prompt for worktree sessions with --extra-context
+
+buildTaskPrompt generates a planning prompt for ModeWorktree sessions
+when --extra-context is provided, mirroring the full-task prompt flow.
+buildFollowupCmd gains a withPrompt parameter so both ModeFullTask and
+ModeWorktree pass the prompt file to claude when one was written.
+Adds test coverage for the new ModeWorktree-with-prompt path.
+EOF
+
+# reconnect --restart: fix claude PATH, session detection, and regular reconnect
 git add cmd/reconnect.go
 git commit -F- <<'EOF'
-reconnect: add --restart to open iTerm2 tabs for inactive worktrees
+reconnect: fix --restart session launch and duplicate detection
 
---restart enumerates worktree directories derived from each config's
-remoteRepo and packages, skips any that already have a screen session by
-name, and opens a new iTerm2 tab running 'claude --continue' for the
-rest. Works for both local and remote (SSH) servers.
+Start screen sessions with `exec bash -l` so the login profile is sourced
+before claude runs, then type `claude --continue` as a followup (matching
+the open command's pattern). Replace name-based session detection with
+directory-based detection via listSessionDirs, which reads child process
+cwds using /proc (Linux) or lsof (macOS) — this catches sessions created
+by `open` regardless of their configID_handle name. Also extend regular
+reconnect to match --restart sessions, which are named after the worktree
+dir basename rather than configID_handle.
 EOF
 
 # commit.sh: record the above commits
 git add commit.sh
 git commit -F- <<'EOF'
-commit.sh: record commits for no-issue tasks and reconnect --restart
+commit.sh: record worktree-checkout, open prompt, and reconnect fixes
 EOF
