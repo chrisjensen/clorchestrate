@@ -1,32 +1,17 @@
 #!/usr/bin/env sh
 set -eu
 
-# open: include issue number in session name
-git add cmd/open.go
+# open, reconnect: launch headclaude instead of claude
+git add cmd/open.go cmd/open_test.go cmd/reconnect.go
 git commit -F- <<'EOF'
-open: include issue number in session name
+open, reconnect: launch headclaude instead of claude
 
-Append the issue number to the screen session name so sessions for
-different issues on the same handle are distinct and don't collide.
+Switch the claude invocation in open and reconnect to headclaude so
+sessions use the headed variant. Updates tests to match.
 EOF
 
-# flock: skip tasks whose issue is already closed
-git add cmd/flock.go internal/github/github.go internal/github/github_test.go
-git commit -F- <<'EOF'
-flock: skip tasks whose issue is already closed
-
-When gh issue develop --list returns no linked branches and no branch
-has been set, check whether the issue itself is closed before attempting
-to create a new branch. Closed or merged issues are skipped with a
-warning, preventing stale task-list entries from creating spurious
-branches.
-
-Adds IsIssueClosed to the github package and improves test coverage for
-OPEN, CLOSED, and MERGED states.
-EOF
-
-# commit.sh: record the above changes
+# commit.sh: record the above change
 git add commit.sh
 git commit -F- <<'EOF'
-commit.sh: record open session-name and flock closed-issue fixes
+commit.sh: record headclaude launch change
 EOF
