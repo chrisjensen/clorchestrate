@@ -11,11 +11,14 @@ is used to launch Claude in sessions. The first entry with default=true
 (or the first entry overall) replaces the hardcoded "headclaude --model
 opus" fallback. All entries are available to --benchmark by label.
 
-Adds DefaultClaudeCmd() and CommandByLabel() methods to Config.
+Adds DefaultClaudeCmd(), CommandByLabel(), and ResolveCommand() methods
+to Config. ResolveCommand matches by exact label first, then by prefix
+on the cmd string, and is used to validate benchmark labels before any
+setup work begins.
 EOF
 
-# open, flock: --benchmark flag and use of configured claude command
-git add cmd/open.go cmd/open_test.go cmd/flock.go internal/github/github.go
+# open, flock: --benchmark flag, configured claude command, and upfront label validation
+git add cmd/open.go cmd/flock.go
 git commit -F- <<'EOF'
 open, flock: use configured claude command and add --benchmark flag
 
@@ -26,49 +29,58 @@ for all sessions even without --benchmark.
 --benchmark <label1,label2,...> opens one session per label. Each session
 gets its branch and worktree directory suffixed with the label so the runs
 are isolated. flock creates a separate gh-linked branch per label via
-gh issue develop --name. The github.DevelopArgs struct gains a BranchName
-field for explicit name override used in benchmark branch creation.
+gh issue develop --name.
+
+Both commands resolve and validate all labels via ResolveCommand() before
+any branch creation or session setup, so a typo fails immediately.
 EOF
 
-# review: new subcommand for benchmark token usage
-git add cmd/review.go main.go
+# review: subcommand for benchmark token usage and evaluation
+git add cmd/review.go
 git commit -F- <<'EOF'
-review: add review subcommand for benchmark token usage
+review: add review subcommand and --evaluate flag
 
 clorchestrate review [config] scans benchmark worktrees (directories
 whose names end with a [[command]] label) and reads token usage from
-Claude Code JSONL transcripts under ~/.claude/projects/ on the server
-where sessions ran. Outputs a TSV of label, worktree, sessions,
-input_tokens, output_tokens, cache_read_tokens, and cache_creation_tokens.
+Claude Code JSONL transcripts under ~/.claude/projects/. Outputs a TSV
+of label, worktree, sessions, input_tokens, output_tokens,
+cache_read_tokens, and cache_creation_tokens.
 
-Without a config arg all configs in ~/.clorchestrate/ are scanned,
-mirroring reconnect's optional-arg behaviour.
+--evaluate launches a non-interactive Claude session (via --print) in
+the parent directory for each benchmark worktree, instructing it to
+compare the implementation against the other directories that ran the
+same task. Sessions run in the parent dir to avoid polluting the
+worktree's own conversation history, which would corrupt token counts
+on re-runs.
+
+Each evaluation outputs a JSON block (problem, clarity, complexity,
+correct, all_aspects, implemented, missing) followed by a prose
+description. clorchestrate merges all_aspects across the task group
+and computes a completeness score (0-100) rather than asking the LLM
+to do the math. JSON extraction strips markdown code fences and
+surrounding prose before parsing.
+
+Evaluation columns are appended to the TSV. Without --evaluate the
+output is unchanged.
 EOF
 
-# worktree-checkout: pre-sync tokensave and fix .claude mkdir
+# worktree-checkout: resilience improvements for tokensave sync
 git add scripts/worktree-checkout.sh
 git commit -F- <<'EOF'
-worktree-checkout: pre-sync tokensave and fix .claude mkdir
+worktree-checkout: make tokensave sync non-fatal and fix shell guards
 
-Tokensave is now synced once on the main worktree before seeding the new
-worktree, rather than in a per-worktree background job. This avoids
-redundant syncs when flock opens multiple worktrees in parallel. The main
-worktree is fetched, stashed if dirty, pulled, synced, then restored.
+git fetch and tokensave sync failures now print a warning and continue
+rather than killing the whole setup. The fetch now uses --quiet with
+stderr suppressed so a temporarily unreachable origin does not abort.
 
-Also add an explicit mkdir -p for the .claude destination directory.
-When the repo's .claude/ had no subdirectories the find-based mkdir loop
-produced nothing, causing the subsequent cp to fail with "No such file
-or directory".
-EOF
-
-# docs: document [[command]] in example config
-git add config/bitmark-extractor-ai.toml.example
-git commit -F- <<'EOF'
-docs: document [[command]] blocks in example config
+Boolean flags (NEEDS_CHECKOUT, NEEDS_PULL, STASHED) switched from
+bare variable expansion to [[ "$VAR" == true ]] guards, which is
+consistent and avoids set -e treating a false-valued variable as a
+failed command.
 EOF
 
 # commit.sh: record the above
 git add commit.sh
 git commit -F- <<'EOF'
-commit.sh: record benchmark commands and review features
+commit.sh: record evaluate flag and benchmark validation commits
 EOF
