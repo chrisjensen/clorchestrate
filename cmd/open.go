@@ -238,10 +238,10 @@ func loadOpenConfig(rawConfigPath, pkg string) (*config.Config, string, string, 
 }
 
 func openRun(rawConfigPath, handle, branch string, opts openOptions) error {
-	if err := validateSafeName("handle", handle); err != nil {
+	if _, err := NewSafeName("handle", handle); err != nil {
 		return err
 	}
-	if err := validateSafeName("branch", branch); err != nil {
+	if _, err := NewSafeName("branch", branch); err != nil {
 		return err
 	}
 

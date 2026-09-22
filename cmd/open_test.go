@@ -321,16 +321,16 @@ func TestParseScreenLs(t *testing.T) {
 	}
 }
 
-func TestValidateSafeName(t *testing.T) {
+func TestNewSafeName(t *testing.T) {
 	for _, s := range []string{"Foo-bar_1.2", "9802-foo", ""} {
-		if err := validateSafeName("handle", s); err != nil {
-			t.Errorf("validateSafeName(%q) = %v, want nil", s, err)
+		if _, err := NewSafeName("handle", s); err != nil {
+			t.Errorf("NewSafeName(%q) = %v, want nil", s, err)
 		}
 	}
-	for _, s := range []string{"has space", "a$b", "a`b", `a"b`, "feat/x", "a;b"} {
-		err := validateSafeName("branch", s)
+	for _, s := range []string{"has space", "a$b", "a`b", `a"b`, "feat/x", "a;b", "$(rm -rf /)", "a|b", "a&b", "a'b"} {
+		_, err := NewSafeName("branch", s)
 		if err == nil {
-			t.Errorf("validateSafeName(%q) = nil, want error", s)
+			t.Errorf("NewSafeName(%q) = nil, want error", s)
 			continue
 		}
 		if !strings.Contains(err.Error(), "invalid branch") {
