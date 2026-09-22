@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/chrisjensen/clorchestrate/internal/config"
 	"github.com/chrisjensen/clorchestrate/internal/github"
 	"github.com/chrisjensen/clorchestrate/internal/iterm"
+	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
 	"github.com/chrisjensen/clorchestrate/internal/taskfile"
 	"github.com/spf13/cobra"
 )
@@ -365,13 +365,7 @@ func aheadShellCmd(worktreeDir, base string) string {
 // path and there's no work to detect.
 func branchAheadCount(server, worktreeDir, base string) (int, error) {
 	shellCmd := aheadShellCmd(worktreeDir, base)
-	var out []byte
-	var err error
-	if server == "" {
-		out, err = exec.Command("sh", "-c", shellCmd).Output()
-	} else {
-		out, err = exec.Command("ssh", server, shellCmd).Output()
-	}
+	out, err := remoteexec.RunShell(server, shellCmd).Output()
 	if err != nil {
 		return 0, fmt.Errorf("rev-list: %w", err)
 	}

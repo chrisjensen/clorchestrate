@@ -9,6 +9,7 @@ import (
 
 	"github.com/chrisjensen/clorchestrate/internal/conffile"
 	"github.com/chrisjensen/clorchestrate/internal/config"
+	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
 	"github.com/chrisjensen/clorchestrate/prompts"
 )
 
@@ -18,7 +19,7 @@ func writeRemoteFile(server, path, content, desc string) error {
 	if server == "" {
 		return os.WriteFile(path, []byte(content), 0644)
 	}
-	cmd := exec.Command("ssh", server, fmt.Sprintf("cat > %s", path))
+	cmd := remoteexec.RunShell(server, fmt.Sprintf("cat > %s", remoteexec.Quote([]string{path})))
 	cmd.Stdin = strings.NewReader(content)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -56,7 +57,7 @@ func runSetup(server, handle string) error {
 		}
 		cmd = exec.Command(filepath.Join(home, "bin", "worktree-checkout.sh"), handle)
 	} else {
-		cmd = exec.Command("ssh", server, fmt.Sprintf("~/bin/worktree-checkout.sh %s", handle))
+		cmd = exec.Command("ssh", server, fmt.Sprintf("~/bin/worktree-checkout.sh %s", remoteexec.Quote([]string{handle})))
 	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

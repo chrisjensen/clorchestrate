@@ -3,8 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
+
+	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
 )
 
 // remoteFileExists returns true if the file exists (may be empty).
@@ -13,7 +14,7 @@ func remoteFileExists(server, path string) bool {
 		_, err := os.Stat(path)
 		return err == nil
 	}
-	return exec.Command("ssh", server, fmt.Sprintf("test -f %s", path)).Run() == nil
+	return remoteexec.Run(server, "test", "-f", path).Run() == nil
 }
 
 // remoteDirExists returns true if path exists and is a directory.
@@ -22,7 +23,7 @@ func remoteDirExists(server, path string) bool {
 		info, err := os.Stat(path)
 		return err == nil && info.IsDir()
 	}
-	return exec.Command("ssh", server, fmt.Sprintf("test -d %s", path)).Run() == nil
+	return remoteexec.Run(server, "test", "-d", path).Run() == nil
 }
 
 // remoteFileNonEmpty returns true if the file exists and has non-zero size.
@@ -31,7 +32,7 @@ func remoteFileNonEmpty(server, path string) bool {
 		info, err := os.Stat(path)
 		return err == nil && info.Size() > 0
 	}
-	return exec.Command("ssh", server, fmt.Sprintf("test -s %s", path)).Run() == nil
+	return remoteexec.Run(server, "test", "-s", path).Run() == nil
 }
 
 // screenSessionRunning returns true if a screen session with the given name exists on the server.
@@ -39,7 +40,7 @@ func screenSessionRunning(server, name string) bool {
 	if server == "" {
 		return false
 	}
-	return exec.Command("ssh", server, fmt.Sprintf("screen -ls | grep -qF '.%s'", name)).Run() == nil
+	return remoteexec.RunShell(server, fmt.Sprintf("screen -ls | grep -qF %s", remoteexec.Quote([]string{"." + name}))).Run() == nil
 }
 
 // readRemoteFile reads a file from the server (or locally when server is "").
@@ -49,7 +50,7 @@ func readRemoteFile(server, path string) (string, error) {
 	if server == "" {
 		out, err = os.ReadFile(path)
 	} else {
-		out, err = exec.Command("ssh", server, fmt.Sprintf("cat %s", path)).Output()
+		out, err = remoteexec.Run(server, "cat", path).Output()
 	}
 	if err != nil {
 		return "", fmt.Errorf("read result file %s: %w", path, err)
@@ -65,7 +66,9 @@ func remoteHomeDir(server string) (string, error) {
 		home, e := os.UserHomeDir()
 		return home, e
 	}
-	out, err = exec.Command("ssh", server, "echo $HOME").Output()
+	// $HOME needs shell expansion, so this can't be argv form; the command
+	// string is a fixed literal with no interpolated input.
+	out, err = remoteexec.RunShell(server, "echo $HOME").Output()
 	if err != nil {
 		return "", err
 	}
@@ -84,15 +87,12 @@ func expandHome(path, homeDir string) string {
 }
 
 // remoteGlob runs a shell glob on the server and returns matching paths.
+// pattern is intentionally left unquoted so its "*" expands — callers must
+// only pass patterns built from SafeName-validated/config-derived parts,
+// never unvalidated input.
 func remoteGlob(server, pattern string) ([]string, error) {
 	shellCmd := fmt.Sprintf("ls -d %s 2>/dev/null || true", pattern)
-	var out []byte
-	var err error
-	if server == "" {
-		out, err = exec.Command("sh", "-c", shellCmd).Output()
-	} else {
-		out, err = exec.Command("ssh", server, shellCmd).Output()
-	}
+	out, err := remoteexec.RunShell(server, shellCmd).Output()
 	if err != nil {
 		return nil, err
 	}

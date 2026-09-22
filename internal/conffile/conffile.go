@@ -47,16 +47,16 @@ func Render(c TaskConf) string {
 	if c.WorktreeDir != "" {
 		fmt.Fprintf(&b, "WORKTREE_DIR=%s\n", c.WorktreeDir)
 	}
-	fmt.Fprintf(&b, "POST_SETUP_CMD=%s\n", shellQuote(c.PostSetupCmd))
+	fmt.Fprintf(&b, "POST_SETUP_CMD=%s\n", ShellQuote(c.PostSetupCmd))
 	if c.Issue != "" {
-		fmt.Fprintf(&b, "PLANNING_CONTEXT=%s\n", shellQuote(c.PlanningContext))
-		fmt.Fprintf(&b, "EXTRA_CONTEXT=%s\n", shellQuote(c.ExtraContext))
+		fmt.Fprintf(&b, "PLANNING_CONTEXT=%s\n", ShellQuote(c.PlanningContext))
+		fmt.Fprintf(&b, "EXTRA_CONTEXT=%s\n", ShellQuote(c.ExtraContext))
 	}
 	return b.String()
 }
 
-// shellQuote wraps s in single quotes, escaping any embedded single quotes
+// ShellQuote wraps s in single quotes, escaping any embedded single quotes
 // using the standard bash pattern: 'it'\”s'
-func shellQuote(s string) string {
+func ShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

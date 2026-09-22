@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
 	"github.com/chrisjensen/clorchestrate/prompts"
 )
 
@@ -97,7 +98,7 @@ func writeEvalPrompt(server, worktreeBase, prompt string) error {
 	if server == "" {
 		return os.WriteFile(path, []byte(prompt), 0644)
 	}
-	cmd := exec.Command("ssh", server, fmt.Sprintf("cat > %s", path))
+	cmd := remoteexec.RunShell(server, fmt.Sprintf("cat > %s", remoteexec.Quote([]string{path})))
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -122,8 +123,10 @@ func deleteEvalArtifacts(server, worktreeBase string) {
 		os.Remove(resultFile)
 		return
 	}
-	shellCmd := fmt.Sprintf("rm -f %s; screen -S %s -X quit 2>/dev/null; true", resultFile, screenName)
-	exec.Command("ssh", server, shellCmd).Run() //nolint:errcheck
+	shellCmd := fmt.Sprintf("rm -f %s; screen -S %s -X quit 2>/dev/null; true", remoteexec.Quote([]string{resultFile}), remoteexec.Quote([]string{screenName}))
+	if err := remoteexec.RunShell(server, shellCmd).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "  warning: cleanup eval artifacts for %s failed: %v\n", worktreeBase, err)
+	}
 }
 
 // isRetryableAPIError returns true when the output is an API-level error that is
@@ -180,6 +183,12 @@ func attemptEvaluation(server, parent, worktreeBase, claudeCmd string) (string, 
 	} else {
 		// Launch a new evaluation.
 		fmt.Fprintf(os.Stderr, "launching evaluation for %s\n", worktreeBase)
+		// parent/promptPath/resultFile are paths derived from worktreeBase (a
+		// worktree directory name clorchestrate itself created from
+		// SafeName-validated handle/branch); claudeCmd is config-defined and
+		// trusted. They sit inside the launch command's own single-quoted
+		// shell fragment, so they can't be independently re-quoted without
+		// breaking that nesting — screenName sits outside it and is quoted.
 		var cmd *exec.Cmd
 		if server == "" {
 			// nohup backgrounds the process so it survives terminal close / suspend.
@@ -187,14 +196,14 @@ func attemptEvaluation(server, parent, worktreeBase, claudeCmd string) (string, 
 				"nohup sh -c 'cd %s && %s --safe-mode --print \"$(cat %s)\" > %s 2>&1' >/dev/null 2>&1 &",
 				parent, claudeCmd, promptPath, resultFile,
 			)
-			cmd = exec.Command("sh", "-c", shellCmd)
+			cmd = remoteexec.RunShell("", shellCmd)
 		} else {
 			// screen -dm starts detached; bash -lc sources the login profile for PATH.
 			screenCmd := fmt.Sprintf(
 				"screen -dmS %s bash -lc 'cd %s && %s --safe-mode --print \"$(cat %s)\" > %s 2>&1'",
-				screenName, parent, claudeCmd, promptPath, resultFile,
+				remoteexec.Quote([]string{screenName}), parent, claudeCmd, promptPath, resultFile,
 			)
-			cmd = exec.Command("ssh", server, screenCmd)
+			cmd = remoteexec.RunShell(server, screenCmd)
 		}
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("launch evaluation for %s: %w", worktreeBase, err)

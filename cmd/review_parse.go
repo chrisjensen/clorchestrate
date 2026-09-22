@@ -5,9 +5,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
 )
 
 // findJSONBounds returns the start index and one-past-end index of the first
@@ -153,14 +154,7 @@ type usageLine struct {
 func readWorktreeTokens(server, homeDir, worktreeDir string) (tokenTotals, error) {
 	projectDir := claudeProjectsDir(homeDir, worktreeDir)
 	shellCmd := fmt.Sprintf("cat %s/*.jsonl 2>/dev/null", projectDir)
-
-	var out []byte
-	var err error
-	if server == "" {
-		out, err = exec.Command("sh", "-c", shellCmd).Output()
-	} else {
-		out, err = exec.Command("ssh", server, shellCmd).Output()
-	}
+	out, err := remoteexec.RunShell(server, shellCmd).Output()
 	if err != nil {
 		return tokenTotals{}, fmt.Errorf("read jsonl from %s: %w", projectDir, err)
 	}
@@ -200,13 +194,7 @@ func readWorktreeTokens(server, homeDir, worktreeDir string) (tokenTotals, error
 // countJSONLFiles returns the number of .jsonl files in a directory.
 func countJSONLFiles(server, dir string) (int, error) {
 	shellCmd := fmt.Sprintf("ls %s/*.jsonl 2>/dev/null | wc -l", dir)
-	var out []byte
-	var err error
-	if server == "" {
-		out, err = exec.Command("sh", "-c", shellCmd).Output()
-	} else {
-		out, err = exec.Command("ssh", server, shellCmd).Output()
-	}
+	out, err := remoteexec.RunShell(server, shellCmd).Output()
 	if err != nil {
 		return 0, err
 	}

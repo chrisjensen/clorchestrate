@@ -42,7 +42,7 @@ func TestRender_Mode2(t *testing.T) {
 }
 
 func TestShellQuote_EscapesSingleQuote(t *testing.T) {
-	got := shellQuote("it's a test")
+	got := ShellQuote("it's a test")
 	want := `'it'\''s a test'`
 	if got != want {
 		t.Errorf("shellQuote = %q, want %q", got, want)

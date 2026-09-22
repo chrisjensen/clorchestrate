@@ -4,21 +4,23 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/chrisjensen/clorchestrate/internal/config"
 	"github.com/chrisjensen/clorchestrate/internal/iterm"
+	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
 )
 
 // runInCurrentTerminal sets the tab color (if any) then runs the remote
 // command in the current terminal, inheriting stdin/stdout/stderr.
+// remoteCmd already embeds its own "ssh -t ..." wrapping when a session is
+// remote, so this always runs locally.
 func runInCurrentTerminal(colorHex, remoteCmd string) error {
 	if colorHex != "" {
 		iterm.WriteTabColor(os.Stdout, colorHex)
 	}
-	cmd := exec.Command("sh", "-c", remoteCmd)
+	cmd := remoteexec.RunShell("", remoteCmd)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -58,14 +60,8 @@ func resolveConfigPath(name string) (string, error) {
 // When server is "" it queries the local screen; otherwise it queries via SSH.
 // Returns "","" if none found or the command fails.
 func findExistingSession(server, sessionName string) (id, state string) {
-	grepCmd := fmt.Sprintf("screen -ls | grep -F '.%s' | head -1", sessionName)
-	var out []byte
-	var err error
-	if server == "" {
-		out, err = exec.Command("sh", "-c", grepCmd).Output()
-	} else {
-		out, err = exec.Command("ssh", server, grepCmd).Output()
-	}
+	grepCmd := fmt.Sprintf("screen -ls | grep -F %s | head -1", remoteexec.Quote([]string{"." + sessionName}))
+	out, err := remoteexec.RunShell(server, grepCmd).Output()
 	if err != nil || len(bytes.TrimSpace(out)) == 0 {
 		return "", ""
 	}
@@ -87,14 +83,8 @@ func findExistingSession(server, sessionName string) (id, state string) {
 // killSession terminates the named screen session, then reaps dead session
 // sockets via `screen -wipe`. Runs locally when server is "".
 func killSession(server, sessionID string) error {
-	shellCmd := fmt.Sprintf("screen -S %s -X quit 2>/dev/null; screen -wipe >/dev/null 2>&1; true", sessionID)
-	var cmd *exec.Cmd
-	if server == "" {
-		cmd = exec.Command("sh", "-c", shellCmd)
-	} else {
-		cmd = exec.Command("ssh", server, shellCmd)
-	}
-	return cmd.Run()
+	shellCmd := fmt.Sprintf("screen -S %s -X quit 2>/dev/null; screen -wipe >/dev/null 2>&1; true", remoteexec.Quote([]string{sessionID}))
+	return remoteexec.RunShell(server, shellCmd).Run()
 }
 
 // checkExistingSession finds an existing screen session for this launch (via

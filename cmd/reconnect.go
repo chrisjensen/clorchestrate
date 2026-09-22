@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/chrisjensen/clorchestrate/internal/config"
 	"github.com/chrisjensen/clorchestrate/internal/iterm"
+	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
 	"github.com/spf13/cobra"
 )
 
@@ -338,12 +338,7 @@ func loadAllConfigs() ([]configEntry, error) {
 
 func listScreenSessions(server string) ([]screenSession, error) {
 	// screen -ls exits non-zero even when sessions exist; ignore exit code.
-	var out []byte
-	if server == "" {
-		out, _ = exec.Command("screen", "-ls").CombinedOutput()
-	} else {
-		out, _ = exec.Command("ssh", server, "screen -ls").CombinedOutput()
-	}
+	out, _ := remoteexec.Run(server, "screen", "-ls").CombinedOutput()
 	return parseScreenLs(string(out)), nil
 }
 
@@ -530,12 +525,7 @@ func listSessionDirs(server string) (map[string]bool, error) {
 		` readlink /proc/$child/cwd 2>/dev/null ||` +
 		` lsof -a -d cwd -p $child -Fn 2>/dev/null | grep '^n' | sed 's/^n//';` +
 		` done; done 2>/dev/null`
-	var out []byte
-	if server == "" {
-		out, _ = exec.Command("sh", "-c", shellCmd).Output()
-	} else {
-		out, _ = exec.Command("ssh", server, shellCmd).Output()
-	}
+	out, _ := remoteexec.RunShell(server, shellCmd).Output()
 	dirs := make(map[string]bool)
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line != "" {
@@ -550,12 +540,7 @@ func listSessionDirs(server string) (map[string]bool, error) {
 func listWorktreeDirs(server, parent, prefix string) ([]string, error) {
 	pattern := parent + "/" + prefix + "-*"
 	shellCmd := fmt.Sprintf("ls -d %s 2>/dev/null", pattern)
-	var out []byte
-	if server == "" {
-		out, _ = exec.Command("sh", "-c", shellCmd).Output()
-	} else {
-		out, _ = exec.Command("ssh", server, shellCmd).Output()
-	}
+	out, _ := remoteexec.RunShell(server, shellCmd).Output()
 	var dirs []string
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line != "" {
