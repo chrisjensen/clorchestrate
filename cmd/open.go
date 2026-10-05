@@ -67,27 +67,46 @@ type openSessionPlan struct {
 	wrotePrompt    bool   // filled in by runSessionSetup
 }
 
-// planSession derives a session's identity: its screen session name, run key,
-// temp-file slug, and worktree directory.
-func planSession(cfg *config.Config, configID, handle, branch, issueNum string, opts openOptions) openSessionPlan {
-	sessionName := configID + "_" + handle
+// buildSessionName returns the screen session name and its runKey (used for
+// tab coloring and reconnect grouping) for a session identified by configID,
+// handle, and normalized issue number. runKey is the session name before any
+// _<label>/_coordinator suffix — reconnect.go's runKeyAndLabel recovers it
+// later by stripping that suffix back off, so a hive's workers and its
+// coordinator must derive the same runKey/base name (same configID, handle,
+// pkg, and issueNum) for their tabs to group and share a color.
+func buildSessionName(configID, handle, issueNum string, opts openOptions) (sessionName, runKey string) {
+	sessionName = configID + "_" + handle
 	if opts.pkg != "" {
 		sessionName = opts.pkg + "_" + handle
 	}
 	if issueNum != "" {
 		sessionName = sessionName + "_" + issueNum
 	}
-	// runKey identifies this session's run for tab coloring — the same value
-	// reconnect.go's runKeyAndLabel recovers later by stripping the
-	// _<label>/_coordinator suffix back off the session name, so a run keeps
-	// the same color whether just launched or reconnected afterward.
-	runKey := sessionName
+	runKey = sessionName
 	if opts.benchmarkLabel != "" {
 		sessionName = sessionName + "_" + opts.benchmarkLabel
 	}
 	if opts.hiveRole == hiveRoleCoordinator {
 		sessionName = sessionName + "_coordinator"
 	}
+	return sessionName, runKey
+}
+
+// resolveSessionTabColor picks the tab color for a session: RunGroupColor
+// per-session for any labeled/benchmark run (hive or single-label), falling
+// back to the per-config ResolveTabColor for plain sessions — unless the
+// config explicitly overrides iterm_tab_color, which always wins.
+func resolveSessionTabColor(cfg *config.Config, configPath, runKey string, opts openOptions) string {
+	if cfg.ITermTabColor == "" && (opts.runDir != "" || opts.benchmarkLabel != "") {
+		return config.RunGroupColor(runKey)
+	}
+	return config.ResolveTabColor(cfg.ITermTabColor, configPath)
+}
+
+// planSession derives a session's identity: its screen session name, run key,
+// temp-file slug, and worktree directory.
+func planSession(cfg *config.Config, configID, handle, branch, issueNum string, opts openOptions) openSessionPlan {
+	sessionName, runKey := buildSessionName(configID, handle, issueNum, opts)
 
 	// Temp setup files (task conf, prompt, task.md) are keyed by a per-session
 	// slug, not just the handle: hive/benchmark sessions share a handle but need
@@ -240,14 +259,19 @@ func openRun(rawConfigPath, handle, branch string, opts openOptions) error {
 		issueNum = n
 	}
 
-	mode, err := detectMode(handle, branch, issueNum)
-	if err != nil {
-		return err
-	}
 	// The coordinator has no branch/worktree of its own; run it as a worktree-style
-	// session whose working directory is the run dir.
+	// session whose working directory is the run dir. It keeps the run's issue
+	// number (for a consistent runKey/tab color with its workers below) even
+	// though it has no branch, so it must skip detectMode's argument
+	// validation, which would otherwise reject issue-without-branch.
+	var mode Mode
 	if opts.hiveRole == hiveRoleCoordinator {
 		mode = ModeWorktree
+	} else {
+		mode, err = detectMode(handle, branch, issueNum)
+		if err != nil {
+			return err
+		}
 	}
 
 	plan := planSession(cfg, configID, handle, branch, issueNum, opts)
@@ -283,13 +307,7 @@ func launchSession(cfg *config.Config, configPath, handle string, opts openOptio
 	forcePlan := opts.hiveRole == ""
 	followup := buildFollowupCmd(mode, plan.slug, plan.worktreeDir, plan.existingSessID, opts.noClaude, plan.wrotePrompt, forcePlan, claudeCmd)
 
-	tabColor := config.ResolveTabColor(cfg.ITermTabColor, configPath)
-	if opts.runDir != "" {
-		// Sibling label sessions (and the hive coordinator) share runKey —
-		// color them by run instead of by config so an A/B run's tabs are
-		// visually grouped and distinct from other runs under the same config.
-		tabColor = config.RunGroupColor(plan.runKey)
-	}
+	tabColor := resolveSessionTabColor(cfg, configPath, plan.runKey, opts)
 	if opts.openTab {
 		// The tab's AppleScript types followup in after the screen session is
 		// up, so screen itself only needs to cd when there's no followup to

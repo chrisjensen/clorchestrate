@@ -37,6 +37,55 @@ func TestDetectMode(t *testing.T) {
 	}
 }
 
+func TestResolveSessionTabColor(t *testing.T) {
+	t.Run("plain session matches ResolveTabColor", func(t *testing.T) {
+		cfg := &config.Config{}
+		got := resolveSessionTabColor(cfg, "myconfig.toml", "run-key", openOptions{})
+		want := config.ResolveTabColor(cfg.ITermTabColor, "myconfig.toml")
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("single-label benchmark sessions get distinct per-session colors", func(t *testing.T) {
+		cfg := &config.Config{}
+		colorA := resolveSessionTabColor(cfg, "myconfig.toml", "task-a", openOptions{benchmarkLabel: "bench"})
+		colorB := resolveSessionTabColor(cfg, "myconfig.toml", "task-b", openOptions{benchmarkLabel: "bench"})
+		if colorA == colorB {
+			t.Errorf("expected distinct colors for different runKeys, both got %q", colorA)
+		}
+		if colorA != config.RunGroupColor("task-a") {
+			t.Errorf("got %q, want RunGroupColor(task-a) %q", colorA, config.RunGroupColor("task-a"))
+		}
+	})
+
+	t.Run("explicit iterm_tab_color override wins even with benchmarkLabel set", func(t *testing.T) {
+		cfg := &config.Config{ITermTabColor: "#123456"}
+		got := resolveSessionTabColor(cfg, "myconfig.toml", "task-a", openOptions{benchmarkLabel: "bench"})
+		if got != "#123456" {
+			t.Errorf("got %q, want override %q", got, "#123456")
+		}
+	})
+}
+
+func TestBuildSessionName_HiveCoordinatorSharesRunKeyWithWorkers(t *testing.T) {
+	// The coordinator keeps the run's issue number (like its workers) so its
+	// runKey — and therefore its tab color — matches theirs, even though it
+	// has no branch of its own.
+	workerOpts := openOptions{issue: "42", benchmarkLabel: "claude"}
+	_, workerRunKey := buildSessionName("cfg", "myhandle", "42", workerOpts)
+
+	coordOpts := openOptions{issue: "42", hiveRole: hiveRoleCoordinator}
+	coordName, coordRunKey := buildSessionName("cfg", "myhandle", "42", coordOpts)
+
+	if coordRunKey != workerRunKey {
+		t.Errorf("coordinator runKey %q != worker runKey %q — coordinator would get a different tab color", coordRunKey, workerRunKey)
+	}
+	if !strings.HasSuffix(coordName, "_coordinator") {
+		t.Errorf("coordinator session name %q should end with _coordinator", coordName)
+	}
+}
+
 func TestBuildRemoteCmd_FullTaskFresh(t *testing.T) {
 	cfg := &config.Config{Server: "myserver"}
 	got := buildRemoteCmd(cfg, ModeFullTask, "my-handle", "mycon_my-handle", "", "~/src/extractor-branch-x", "")

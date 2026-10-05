@@ -57,10 +57,12 @@ func launchLabelSet(configPath, handle, baseBranch, baseRef string, cfg *config.
 	}
 
 	if hive {
-		// The coordinator has no issue/branch of its own — clear issue so
-		// detectMode doesn't see a dangling issue with no branch.
+		// The coordinator has no branch of its own, but keeps baseOpts.issue
+		// (the run's shared issue number) so its runKey/tab color matches its
+		// workers'; openRun special-cases hiveRole==coordinator to skip the
+		// branch-vs-issue argument validation that issue-without-branch would
+		// otherwise fail.
 		coordOpts := baseOpts
-		coordOpts.issue = ""
 		coordOpts.benchmarkLabel = ""
 		coordOpts.hiveRole = hiveRoleCoordinator
 		coordOpts.runDir = runDir
