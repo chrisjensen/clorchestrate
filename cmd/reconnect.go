@@ -24,6 +24,12 @@ type configEntry struct {
 	cfg  *config.Config
 }
 
+type plannedTab struct {
+	sess     screenSession
+	tabColor string
+	runKey   string
+}
+
 func NewReconnectCmd() *cobra.Command {
 	var force bool
 	var restart bool
@@ -160,11 +166,6 @@ func reconnectRun(args []string, force bool) error {
 				}
 			}
 
-			type plannedTab struct {
-				sess     screenSession
-				tabColor string
-				runKey   string
-			}
 			var planned []plannedTab
 			for _, sess := range sessions {
 				var matched *matcher
@@ -195,6 +196,7 @@ func reconnectRun(args []string, force bool) error {
 				}
 				groups[p.runKey] = append(groups[p.runKey], i)
 			}
+			groupOrder = mergeLegacyCoordinatorGroups(planned, groups, groupOrder)
 			for _, runKey := range groupOrder {
 				idxs := groups[runKey]
 				if len(idxs) < 2 {
@@ -254,6 +256,55 @@ func runKeyAndLabel(name string, labels []string) (runKey string, grouped bool) 
 		}
 	}
 	return name, false
+}
+
+// normalizeRunKey strips a trailing "_<digits>" issue-number segment from a
+// runKey. Used only as a fallback merge key for legacy coordinator sessions
+// launched before a fix where the hive coordinator's session name omitted
+// the run's issue number while its workers kept it (e.g. coordinator
+// "foo_coordinator" vs worker "foo_123_bar"). Never used for coloring or
+// primary grouping, since stripping trailing digits from every runKey would
+// wrongly merge unrelated runs that share a handle but differ by issue.
+func normalizeRunKey(key string) string {
+	idx := strings.LastIndex(key, "_")
+	if idx < 0 {
+		return key
+	}
+	suffix := key[idx+1:]
+	if suffix == "" || !allDigits(suffix) {
+		return key
+	}
+	return key[:idx]
+}
+
+// mergeLegacyCoordinatorGroups folds an orphaned coordinator session (grouped
+// alone under its own runKey) into a sibling workers' group when their
+// runKeys match once the issue-number segment is stripped. This recovers
+// adjacent grouping for runs started before the coordinator's session name
+// was fixed to include the issue number. groups/groupOrder are mutated in
+// place; the (possibly shortened) groupOrder is returned.
+func mergeLegacyCoordinatorGroups(planned []plannedTab, groups map[string][]int, groupOrder []string) []string {
+	for _, runKey := range groupOrder {
+		idxs := groups[runKey]
+		if len(idxs) != 1 || !strings.HasSuffix(planned[idxs[0]].sess.name, "_coordinator") {
+			continue
+		}
+		for _, otherKey := range groupOrder {
+			if otherKey == runKey || normalizeRunKey(otherKey) != runKey {
+				continue
+			}
+			groups[otherKey] = append(groups[otherKey], idxs[0])
+			delete(groups, runKey)
+			break
+		}
+	}
+	filtered := groupOrder[:0]
+	for _, runKey := range groupOrder {
+		if _, ok := groups[runKey]; ok {
+			filtered = append(filtered, runKey)
+		}
+	}
+	return filtered
 }
 
 func loadAllConfigs() ([]configEntry, error) {
