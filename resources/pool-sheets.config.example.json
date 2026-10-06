@@ -1,0 +1,5 @@
+{
+  "spreadsheetId": "put-the-id-from-your-google-sheet-url-here",
+  "sheetName": "Pool Runs",
+  "serviceAccountKeyFile": "/home/you/.config/clorchestrate/sheets-sa-key.json"
+}

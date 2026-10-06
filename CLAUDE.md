@@ -28,3 +28,6 @@ export PATH="$HOME/.local/bin:$PATH"
 
 Failures show up in `<worktree>/.setup.log` on the server — fix the profile
 and re-run.
+
+## Pool skills
+`skills/pool-*` (worker/coordinate/evaluate) are installed locally with `./install.sh`, which also installs `pool-signal.sh` and `pool-sheet-append.mjs` to `~/.local/bin`. `scripts/pool-signal.sh` is also embedded in the binary and pushed to servers — rebuild after editing.
