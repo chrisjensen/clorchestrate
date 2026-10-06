@@ -308,7 +308,7 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 		}
 
 		// A single 'command:' label picks the launcher; a multi-label list would
-		// have been handled by the hive path above and continued past here.
+		// have been handled by the pool path above and continued past here.
 		var commandLabel string
 		if len(t.Commands) == 1 {
 			resolved, err := effectiveCfg.ResolveCommand(t.Commands[0])

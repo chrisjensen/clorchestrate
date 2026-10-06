@@ -13,7 +13,7 @@ CONF="/tmp/task-${HANDLE}.conf"
 # shellcheck disable=SC1090
 source "$CONF"
 
-# Hive mode (multi-session benchmark run): RUN_DIR is a plain directory holding
+# Pool mode (multi-session benchmark run): RUN_DIR is a plain directory holding
 # task.md, the coordination sentinels, and one worktree subdir per worker label.
 # When set, prepare_run_dir creates it and stages task.md from /tmp/task-<h>.md.
 RUN_DIR="${RUN_DIR:-}"
@@ -38,13 +38,13 @@ fi
 REPO_ROOT="$(realpath "$REMOTE_REPO")"
 SANITIZED="${BRANCH//\//-}"
 WORKTREE_PREFIX="${WORKTREE_PREFIX:-$(basename "$REPO_ROOT")}"
-# In hive mode WORKTREE_DIR is passed explicitly (a child of RUN_DIR); otherwise
+# In pool mode WORKTREE_DIR is passed explicitly (a child of RUN_DIR); otherwise
 # derive the sibling-of-repo path.
 WORKTREE_DIR="${WORKTREE_DIR:-$(dirname "$REPO_ROOT")/${WORKTREE_PREFIX}-${SANITIZED}}"
 RESOURCES="$REPO_ROOT/resources"
 POST_SETUP_CMD="${POST_SETUP_CMD:-}"
 
-# Ensure the run dir (worktree parent, in hive mode) exists before git creates
+# Ensure the run dir (worktree parent, in pool mode) exists before git creates
 # the worktree, and stage task.md there.
 prepare_run_dir
 start_background_setup() {

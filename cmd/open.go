@@ -33,24 +33,24 @@ type openOptions struct {
 	benchmarkLabel string // non-empty when opening one variant of a benchmark run
 	commandLabel   string // non-empty when a task selects a specific [[command]] via 'command:'
 
-	// Hive coordination (multi-session benchmark runs). role is set for hive
+	// Pool coordination (multi-session benchmark runs). role is set for pool
 	// sessions. Workers run in <runDir>/<benchmarkLabel>, prompted with their
-	// task body plus an instruction to use the hive-worker skill; the
+	// task body plus an instruction to use the pool-worker skill; the
 	// coordinator runs in runDir itself and is prompted with
-	// /hive-coordinate <coordinatorBase>. See the hive-worker / hive-coordinate
+	// /pool-coordinate <coordinatorBase>. See the pool-worker / pool-coordinate
 	// skills.
-	hiveRole        hiveRole
+	poolRole        poolRole
 	runDir          string
 	coordinatorBase string
 }
 
-// hiveRole is a session's role in a hive run; the empty value means not a hive
+// poolRole is a session's role in a pool run; the empty value means not a pool
 // session.
-type hiveRole string
+type poolRole string
 
 const (
-	hiveRoleWorker      hiveRole = "worker"
-	hiveRoleCoordinator hiveRole = "coordinator"
+	poolRoleWorker      poolRole = "worker"
+	poolRoleCoordinator poolRole = "coordinator"
 )
 
 // openSessionPlan is the derived identity of one session launch, shared by
@@ -71,7 +71,7 @@ type openSessionPlan struct {
 // tab coloring and reconnect grouping) for a session identified by configID,
 // handle, and normalized issue number. runKey is the session name before any
 // _<label>/_coordinator suffix — reconnect.go's runKeyAndLabel recovers it
-// later by stripping that suffix back off, so a hive's workers and its
+// later by stripping that suffix back off, so a pool's workers and its
 // coordinator must derive the same runKey/base name (same configID, handle,
 // pkg, and issueNum) for their tabs to group and share a color.
 func buildSessionName(configID, handle, issueNum string, opts openOptions) (sessionName, runKey string) {
@@ -86,14 +86,14 @@ func buildSessionName(configID, handle, issueNum string, opts openOptions) (sess
 	if opts.benchmarkLabel != "" {
 		sessionName = sessionName + "_" + opts.benchmarkLabel
 	}
-	if opts.hiveRole == hiveRoleCoordinator {
+	if opts.poolRole == poolRoleCoordinator {
 		sessionName = sessionName + "_coordinator"
 	}
 	return sessionName, runKey
 }
 
 // resolveSessionTabColor picks the tab color for a session: RunGroupColor
-// per-session for any labeled/benchmark run (hive or single-label), falling
+// per-session for any labeled/benchmark run (pool or single-label), falling
 // back to the per-config ResolveTabColor for plain sessions — unless the
 // config explicitly overrides iterm_tab_color, which always wins.
 func resolveSessionTabColor(cfg *config.Config, configPath, runKey string, opts openOptions) string {
@@ -109,26 +109,26 @@ func planSession(cfg *config.Config, configID, handle, branch, issueNum string, 
 	sessionName, runKey := buildSessionName(configID, handle, issueNum, opts)
 
 	// Temp setup files (task conf, prompt, task.md) are keyed by a per-session
-	// slug, not just the handle: hive/benchmark sessions share a handle but need
+	// slug, not just the handle: pool/benchmark sessions share a handle but need
 	// distinct prompt files, since the tab followup cat's the prompt file
 	// asynchronously and would otherwise read a sibling session's prompt.
 	slug := handle
 	if opts.benchmarkLabel != "" {
 		slug += "-" + opts.benchmarkLabel
 	}
-	if opts.hiveRole == hiveRoleCoordinator {
+	if opts.poolRole == poolRoleCoordinator {
 		slug += "-coordinator"
 	}
 
 	// worktreeDir is needed both for session detection (--restart sessions are
-	// named after the worktree basename) and later for buildRemoteCmd. In hive
+	// named after the worktree basename) and later for buildRemoteCmd. In pool
 	// mode a worker lives in <runDir>/<label> and the coordinator runs in the
 	// run dir itself (no worktree of its own).
 	worktreeDir := worktreePath(cfg.RemoteRepo, branch, cfg.WorktreePrefix)
-	switch opts.hiveRole {
-	case hiveRoleWorker:
+	switch opts.poolRole {
+	case poolRoleWorker:
 		worktreeDir = filepath.Join(opts.runDir, opts.benchmarkLabel)
-	case hiveRoleCoordinator:
+	case poolRoleCoordinator:
 		worktreeDir = opts.runDir
 	}
 	return openSessionPlan{
@@ -265,7 +265,7 @@ func openRun(rawConfigPath, handle, branch string, opts openOptions) error {
 	// though it has no branch, so it must skip detectMode's argument
 	// validation, which would otherwise reject issue-without-branch.
 	var mode Mode
-	if opts.hiveRole == hiveRoleCoordinator {
+	if opts.poolRole == poolRoleCoordinator {
 		mode = ModeWorktree
 	} else {
 		mode, err = detectMode(handle, branch, issueNum)
@@ -301,10 +301,10 @@ func openRun(rawConfigPath, handle, branch string, opts openOptions) error {
 // launchSession builds the launch commands and dispatches the session to an
 // iTerm tab or the current terminal.
 func launchSession(cfg *config.Config, configPath, handle string, opts openOptions, plan openSessionPlan, mode Mode, claudeCmd string) error {
-	// Hive sessions launch a skill invocation as the first prompt and must not
+	// Pool sessions launch a skill invocation as the first prompt and must not
 	// start in plan mode — the worker writes PLAN.md and later implements, both
 	// of which plan mode would block.
-	forcePlan := opts.hiveRole == ""
+	forcePlan := opts.poolRole == ""
 	followup := buildFollowupCmd(mode, plan.slug, plan.worktreeDir, plan.existingSessID, opts.noClaude, plan.wrotePrompt, forcePlan, claudeCmd)
 
 	tabColor := resolveSessionTabColor(cfg, configPath, plan.runKey, opts)

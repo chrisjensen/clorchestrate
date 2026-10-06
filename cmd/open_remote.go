@@ -37,8 +37,8 @@ func writePromptFile(server, handle, prompt string) error {
 	return writeRemoteFile(server, fmt.Sprintf("/tmp/task-%s.prompt.md", handle), prompt, "prompt file")
 }
 
-// writeTaskMD stages the hive task.md body; the checkout script copies it into
-// the run dir as task.md (read by the hive-coordinate skill during its
+// writeTaskMD stages the pool task.md body; the checkout script copies it into
+// the run dir as task.md (read by the pool-coordinate skill during its
 // merge/review steps).
 func writeTaskMD(server, handle, body string) error {
 	return writeRemoteFile(server, fmt.Sprintf("/tmp/task-%s.md", handle), body, "task.md")
@@ -65,7 +65,7 @@ func runSetup(server, handle string) error {
 	return cmd.Run()
 }
 
-// buildTaskConf assembles the task conf the checkout script consumes. In hive
+// buildTaskConf assembles the task conf the checkout script consumes. In pool
 // mode the checkout script creates the run dir and copies task.md there: a
 // worker gets its worktree at <runDir>/<label>; the coordinator has no
 // worktree (empty WorktreeDir + empty Branch => run-dir-only setup).
@@ -76,9 +76,9 @@ func buildTaskConf(cfg *config.Config, mode Mode, opts openOptions, branch, issu
 		WorktreePrefix: cfg.WorktreePrefix,
 		PostSetupCmd:   cfg.PostSetupCmd,
 	}
-	if opts.hiveRole != "" {
+	if opts.poolRole != "" {
 		tc.RunDir = opts.runDir
-		if opts.hiveRole == hiveRoleWorker {
+		if opts.poolRole == poolRoleWorker {
 			tc.WorktreeDir = worktreeDir
 		} else {
 			tc.Branch = ""
@@ -93,7 +93,7 @@ func buildTaskConf(cfg *config.Config, mode Mode, opts openOptions, branch, issu
 
 // buildTaskBody renders the task body (issue ref / description + planning
 // context) a session works from: the full issue prompt for a task, or a
-// planning-context prompt for hive sessions and label worktree sessions with
+// planning-context prompt for pool sessions and label worktree sessions with
 // extra context. Returns "" when there is nothing to prompt with.
 func buildTaskBody(cfg *config.Config, mode Mode, opts openOptions, issueNum string) (string, error) {
 	if mode == ModeFullTask {
@@ -109,7 +109,7 @@ func buildTaskBody(cfg *config.Config, mode Mode, opts openOptions, issueNum str
 		}
 		return p, nil
 	}
-	if opts.hiveRole != "" || (mode == ModeWorktree && (opts.extraContext != "" || opts.benchmarkLabel != "")) {
+	if opts.poolRole != "" || (mode == ModeWorktree && (opts.extraContext != "" || opts.benchmarkLabel != "")) {
 		p, err := prompts.Prompt(prompts.PromptData{
 			PlanningContext: cfg.PlanningContext,
 			Description:     opts.extraContext,
@@ -122,23 +122,23 @@ func buildTaskBody(cfg *config.Config, mode Mode, opts openOptions, issueNum str
 	return "", nil
 }
 
-// sessionPromptFile writes the session's launch prompt file, and for hive
+// sessionPromptFile writes the session's launch prompt file, and for pool
 // workers the shared task.md. A worker's launch prompt is its task body (so
 // the chat history shows what it was asked to do) plus an instruction to work
-// it via the hive-worker skill; the coordinator has no task body, only
-// /hive-coordinate <base>. Only workers write task.md: they run first and
+// it via the pool-worker skill; the coordinator has no task body, only
+// /pool-coordinate <base>. Only workers write task.md: they run first and
 // (for issue tasks) render the full issue prompt, whereas the coordinator has
 // no issue and would otherwise clobber the run dir's task.md with an empty
-// body. Non-hive benchmark sessions get a .clorchestrate-done instruction
+// body. Non-pool benchmark sessions get a .clorchestrate-done instruction
 // appended. Reports whether a prompt file was written.
 func sessionPromptFile(cfg *config.Config, opts openOptions, slug, taskBody string) (bool, error) {
-	if opts.hiveRole != "" {
-		if taskBody != "" && opts.hiveRole == hiveRoleWorker {
+	if opts.poolRole != "" {
+		if taskBody != "" && opts.poolRole == poolRoleWorker {
 			if err := writeTaskMD(cfg.Server, slug, taskBody); err != nil {
 				return false, err
 			}
 		}
-		launchPrompt := hiveLaunchPrompt(opts.hiveRole, taskBody, opts.coordinatorBase)
+		launchPrompt := poolLaunchPrompt(opts.poolRole, taskBody, opts.coordinatorBase)
 		if err := writePromptFile(cfg.Server, slug, launchPrompt); err != nil {
 			return false, err
 		}

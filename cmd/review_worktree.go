@@ -19,11 +19,11 @@ func taskKeyOf(worktree, label string) string {
 
 // discoveredWorktree is one benchmark worktree found on disk for a command
 // label, in either the legacy sibling layout (<prefix>-<base>-<label>) or the
-// hive child layout (<prefix>-<base>/<label>, with sentinels at the run root).
+// pool child layout (<prefix>-<base>/<label>, with sentinels at the run root).
 type discoveredWorktree struct {
 	dir     string // worktree path
 	taskKey string // shared across the labels of one task
-	runDir  string // hive run dir (parent of dir); "" in the sibling layout
+	runDir  string // pool run dir (parent of dir); "" in the sibling layout
 }
 
 // discoverWorktrees globs both benchmark layouts for a command label. parent is
@@ -38,7 +38,7 @@ func discoverWorktrees(server, parent, prefix, label string) ([]discoveredWorktr
 	for _, dir := range siblings {
 		out = append(out, discoveredWorktree{dir: dir, taskKey: taskKeyOf(filepath.Base(dir), label)})
 	}
-	// Hive child layout: <parent>/<prefix>-<base>/<label>. The task key is the
+	// Pool child layout: <parent>/<prefix>-<base>/<label>. The task key is the
 	// run dir's base name (workers of one task share it).
 	children, err := remoteGlob(server, filepath.Join(parent, prefix+"-*", label))
 	if err != nil {
@@ -52,7 +52,7 @@ func discoverWorktrees(server, parent, prefix, label string) ([]discoveredWorktr
 }
 
 // worktreeDone reports whether a worktree's session ran to completion: either
-// the legacy <worktree>/.clorchestrate-done marker, or the hive sentinel
+// the legacy <worktree>/.clorchestrate-done marker, or the pool sentinel
 // <runDir>/<label>.impl.done at the run-dir root.
 func worktreeDone(server string, w discoveredWorktree, label string) bool {
 	if remoteFileExists(server, filepath.Join(w.dir, ".clorchestrate-done")) {
@@ -117,7 +117,7 @@ func markIncompleteGroups(rows []tokenTotals, scanCfg *config.Config, force bool
 			if cmd.Label == rows[i].label {
 				continue
 			}
-			// The sibling shares this row's layout: hive siblings live under the
+			// The sibling shares this row's layout: pool siblings live under the
 			// run dir, legacy siblings alongside the repo.
 			var sib discoveredWorktree
 			if rows[i].runDir != "" {

@@ -68,14 +68,14 @@ func TestResolveSessionTabColor(t *testing.T) {
 	})
 }
 
-func TestBuildSessionName_HiveCoordinatorSharesRunKeyWithWorkers(t *testing.T) {
+func TestBuildSessionName_PoolCoordinatorSharesRunKeyWithWorkers(t *testing.T) {
 	// The coordinator keeps the run's issue number (like its workers) so its
 	// runKey — and therefore its tab color — matches theirs, even though it
 	// has no branch of its own.
 	workerOpts := openOptions{issue: "42", benchmarkLabel: "claude"}
 	_, workerRunKey := buildSessionName("cfg", "myhandle", "42", workerOpts)
 
-	coordOpts := openOptions{issue: "42", hiveRole: hiveRoleCoordinator}
+	coordOpts := openOptions{issue: "42", poolRole: poolRoleCoordinator}
 	coordName, coordRunKey := buildSessionName("cfg", "myhandle", "42", coordOpts)
 
 	if coordRunKey != workerRunKey {
@@ -214,9 +214,9 @@ func TestBuildFollowupCmd(t *testing.T) {
 	if got := buildFollowupCmd(ModeWorktree, "h", wd, "", false, true, true, defaultCmd); !strings.Contains(got, "cd ~/src/extractor-branch-x && headclaude --model opus --permission-mode plan \"$(cat /tmp/task-h.prompt.md)\"") {
 		t.Errorf("ModeWorktree with prompt: got %q", got)
 	}
-	// Hive sessions pass forcePlan=false: the skill prompt runs without plan mode.
+	// Pool sessions pass forcePlan=false: the skill prompt runs without plan mode.
 	if got := buildFollowupCmd(ModeWorktree, "h", wd, "", false, true, false, defaultCmd); got != `cd ~/src/extractor-branch-x && headclaude --model opus "$(cat /tmp/task-h.prompt.md)"` {
-		t.Errorf("hive no-plan with prompt: got %q", got)
+		t.Errorf("pool no-plan with prompt: got %q", got)
 	}
 	if got := buildFollowupCmd(ModeFullTask, "h", wd, "123.x", false, true, true, defaultCmd); got != "" {
 		t.Errorf("reattach should suppress followup: got %q", got)
@@ -239,14 +239,14 @@ func TestBuildFollowupCmd(t *testing.T) {
 	}
 }
 
-func TestHiveLaunchPrompt(t *testing.T) {
-	if got := hiveLaunchPrompt(hiveRoleWorker, "Implement issue #42.", ""); got != "Implement issue #42.\n\nUse the hive-worker skill to implement this task." {
+func TestPoolLaunchPrompt(t *testing.T) {
+	if got := poolLaunchPrompt(poolRoleWorker, "Implement issue #42.", ""); got != "Implement issue #42.\n\nUse the pool-worker skill to implement this task." {
 		t.Errorf("worker with task body: got %q", got)
 	}
-	if got := hiveLaunchPrompt(hiveRoleWorker, "", ""); got != "Use the hive-worker skill to implement this task." {
+	if got := poolLaunchPrompt(poolRoleWorker, "", ""); got != "Use the pool-worker skill to implement this task." {
 		t.Errorf("worker with no task body: got %q", got)
 	}
-	if got := hiveLaunchPrompt(hiveRoleCoordinator, "Implement issue #42.", "main"); got != "/hive-coordinate main" {
+	if got := poolLaunchPrompt(poolRoleCoordinator, "Implement issue #42.", "main"); got != "/pool-coordinate main" {
 		t.Errorf("coordinator: got %q", got)
 	}
 }
@@ -374,14 +374,14 @@ func TestPlanSession(t *testing.T) {
 			worktree: "~/src/extractor-b", worktreeB: "extractor-b",
 		},
 		{
-			name: "hive worker", handle: "h", branch: "b",
-			opts:    openOptions{benchmarkLabel: "fast", hiveRole: hiveRoleWorker, runDir: "/tmp/run"},
+			name: "pool worker", handle: "h", branch: "b",
+			opts:    openOptions{benchmarkLabel: "fast", poolRole: poolRoleWorker, runDir: "/tmp/run"},
 			session: "mycon_h_fast", runKey: "mycon_h", slug: "h-fast",
 			worktree: "/tmp/run/fast", worktreeB: "fast",
 		},
 		{
-			name: "hive coordinator", handle: "h", branch: "b",
-			opts:    openOptions{benchmarkLabel: "fast", hiveRole: hiveRoleCoordinator, runDir: "/tmp/run"},
+			name: "pool coordinator", handle: "h", branch: "b",
+			opts:    openOptions{benchmarkLabel: "fast", poolRole: poolRoleCoordinator, runDir: "/tmp/run"},
 			session: "mycon_h_fast_coordinator", runKey: "mycon_h", slug: "h-fast-coordinator",
 			worktree: "/tmp/run", worktreeB: "run",
 		},
@@ -416,14 +416,14 @@ func TestBuildTaskConf(t *testing.T) {
 		t.Errorf("full task: got %+v", tc)
 	}
 
-	tc = buildTaskConf(cfg, ModeWorktree, openOptions{hiveRole: hiveRoleWorker, runDir: "/tmp/run"}, "b", "", "/tmp/run/fast")
+	tc = buildTaskConf(cfg, ModeWorktree, openOptions{poolRole: poolRoleWorker, runDir: "/tmp/run"}, "b", "", "/tmp/run/fast")
 	if tc.RunDir != "/tmp/run" || tc.WorktreeDir != "/tmp/run/fast" || tc.Branch != "b" {
-		t.Errorf("hive worker: got %+v", tc)
+		t.Errorf("pool worker: got %+v", tc)
 	}
 
-	tc = buildTaskConf(cfg, ModeWorktree, openOptions{hiveRole: hiveRoleCoordinator, runDir: "/tmp/run"}, "b", "", "/tmp/run")
+	tc = buildTaskConf(cfg, ModeWorktree, openOptions{poolRole: poolRoleCoordinator, runDir: "/tmp/run"}, "b", "", "/tmp/run")
 	if tc.RunDir != "/tmp/run" || tc.WorktreeDir != "" || tc.Branch != "" {
-		t.Errorf("hive coordinator: got %+v", tc)
+		t.Errorf("pool coordinator: got %+v", tc)
 	}
 }
 

@@ -14,7 +14,7 @@ type TaskConf struct {
 	PostSetupCmd    string
 	PlanningContext string
 	ExtraContext    string
-	// Hive mode: when RunDir is set the checkout script creates the run dir,
+	// Pool mode: when RunDir is set the checkout script creates the run dir,
 	// places the worktree at WorktreeDir (a child of RunDir) rather than the
 	// derived sibling path, and copies /tmp/task-<handle>.md to <RunDir>/task.md.
 	RunDir      string

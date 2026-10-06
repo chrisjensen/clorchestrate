@@ -7,15 +7,15 @@ import (
 	"github.com/chrisjensen/clorchestrate/internal/config"
 )
 
-// hiveLaunchPrompt builds a hive session's initial Claude prompt. A worker's
+// poolLaunchPrompt builds a pool session's initial Claude prompt. A worker's
 // prompt is its task body (so the chat history shows what it was asked to do)
-// plus an instruction to work it via the hive-worker skill; the coordinator
-// has no task body, only /hive-coordinate <coordinatorBase>.
-func hiveLaunchPrompt(role hiveRole, taskBody, coordinatorBase string) string {
-	if role == hiveRoleCoordinator {
-		return "/hive-coordinate " + coordinatorBase
+// plus an instruction to work it via the pool-worker skill; the coordinator
+// has no task body, only /pool-coordinate <coordinatorBase>.
+func poolLaunchPrompt(role poolRole, taskBody, coordinatorBase string) string {
+	if role == poolRoleCoordinator {
+		return "/pool-coordinate " + coordinatorBase
 	}
-	prompt := "Use the hive-worker skill to implement this task."
+	prompt := "Use the pool-worker skill to implement this task."
 	if taskBody != "" {
 		prompt = taskBody + "\n\n" + prompt
 	}
@@ -93,7 +93,7 @@ func buildRemoteCmd(cfg *config.Config, mode Mode, handle, sessionName, existing
 // Returns "" when no followup should be typed (reattach, non-task modes, or
 // noClaude — screen has already cd'd into the worktree in that case).
 // forcePlan adds --permission-mode plan for the plain (non-template) claude
-// launch; hive sessions pass false because the skill drives its own workflow.
+// launch; pool sessions pass false because the skill drives its own workflow.
 func buildFollowupCmd(mode Mode, handle, worktreeDir, existingSessID string, noClaude, withPrompt, forcePlan bool, claudeCmd string) string {
 	if existingSessID != "" || noClaude {
 		return ""

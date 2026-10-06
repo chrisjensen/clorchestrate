@@ -68,7 +68,7 @@ type tokenTotals struct {
 	label               string
 	worktree            string
 	taskKey             string // task-group identity, layout-agnostic
-	runDir              string // hive run dir; "" in the legacy sibling layout
+	runDir              string // pool run dir; "" in the legacy sibling layout
 	sessions            int
 	inputTokens         int
 	outputTokens        int
@@ -167,7 +167,7 @@ func reviewRun(configArg string, evaluate, fresh, force bool, groups []string) e
 
 			scanCfgStart := len(rows)
 			for _, command := range scanCfg.Commands {
-				// Glob both the legacy sibling and hive child layouts.
+				// Glob both the legacy sibling and pool child layouts.
 				worktrees, err := discoverWorktrees(scanCfg.Server, parent, prefix, command.Label)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "warning: glob for %s: %v\n", command.Label, err)

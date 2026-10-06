@@ -23,7 +23,7 @@ var (
 	packageRE = regexp.MustCompile(`(?i)^package:\s*(\S+)$`)
 	// command: accepts a single label or a comma-separated list (e.g.
 	// "command: zai,claude"), which fans the task out into one worker session
-	// per label plus a coordinator (see batch benchmark/hive mode).
+	// per label plus a coordinator (see batch benchmark/pool mode).
 	commandRE = regexp.MustCompile(`(?i)^command:\s*(\S.*)$`)
 	// Matches: URL form, org/repo#NNN shorthand, or bare #NNN.
 	// We take the last number found in the match.

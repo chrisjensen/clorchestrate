@@ -10,7 +10,7 @@ import (
 )
 
 // launchLabelSet opens one session per label: a plain labeled session for a
-// single label, or — when there are 2+ labels — hive mode (a shared run dir,
+// single label, or — when there are 2+ labels — pool mode (a shared run dir,
 // worker worktrees at <runDir>/<label>, plus a coordinator session). This is
 // the one implementation shared by `open --benchmark` and batch's per-task
 // `command:`/`--benchmark` handling, so both behave identically for the same
@@ -20,7 +20,7 @@ import (
 // "commits ahead" against (batch's resolved default base branch) — passing
 // "" skips that check, matching open's own --benchmark behavior.
 func launchLabelSet(configPath, handle, baseBranch, baseRef string, cfg *config.Config, labels []string, baseOpts openOptions, resolveBranch func(label string) (string, error)) error {
-	hive := len(labels) >= 2
+	pool := len(labels) >= 2
 	runDir := worktreePath(cfg.RemoteRepo, baseBranch, cfg.WorktreePrefix)
 
 	for _, label := range labels {
@@ -30,7 +30,7 @@ func launchLabelSet(configPath, handle, baseBranch, baseRef string, cfg *config.
 		}
 
 		worktreeDir := worktreePath(cfg.RemoteRepo, branch, cfg.WorktreePrefix)
-		if hive {
+		if pool {
 			worktreeDir = filepath.Join(runDir, label)
 		}
 
@@ -47,8 +47,8 @@ func launchLabelSet(configPath, handle, baseBranch, baseRef string, cfg *config.
 			}
 			opts.noClaude = ahead > 0
 		}
-		if hive {
-			opts.hiveRole = hiveRoleWorker
+		if pool {
+			opts.poolRole = poolRoleWorker
 			opts.runDir = runDir
 		}
 		if err := openRun(configPath, handle, branch, opts); err != nil {
@@ -56,15 +56,15 @@ func launchLabelSet(configPath, handle, baseBranch, baseRef string, cfg *config.
 		}
 	}
 
-	if hive {
+	if pool {
 		// The coordinator has no branch of its own, but keeps baseOpts.issue
 		// (the run's shared issue number) so its runKey/tab color matches its
-		// workers'; openRun special-cases hiveRole==coordinator to skip the
+		// workers'; openRun special-cases poolRole==coordinator to skip the
 		// branch-vs-issue argument validation that issue-without-branch would
 		// otherwise fail.
 		coordOpts := baseOpts
 		coordOpts.benchmarkLabel = ""
-		coordOpts.hiveRole = hiveRoleCoordinator
+		coordOpts.poolRole = poolRoleCoordinator
 		coordOpts.runDir = runDir
 		coordOpts.commandLabel = labels[0]
 		if err := openRun(configPath, handle, "", coordOpts); err != nil {
