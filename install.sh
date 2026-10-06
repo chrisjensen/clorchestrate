@@ -22,3 +22,26 @@ for script in "$SCRIPT_DIR/scripts/pool-signal.sh" "$SCRIPT_DIR/bin/pool-sheet-a
   install -m 755 "$script" "$BIN_DEST/$(basename "$script")"
   echo "Installed: $BIN_DEST/$(basename "$script")"
 done
+
+PROFILE="$HOME/.profile"
+PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+
+case ":$PATH:" in
+  *":$BIN_DEST:"*) ;;
+  *)
+    if [ -f "$PROFILE" ] && grep -qF '.local/bin' "$PROFILE"; then
+      : # already configured, just not in this shell's current PATH
+    else
+      echo
+      echo "$BIN_DEST is not on your PATH."
+      read -r -p "Add it to $PROFILE now? [y/N] " reply
+      if [[ "$reply" =~ ^[Yy]$ ]]; then
+        printf '\n%s\n' "$PATH_LINE" >> "$PROFILE"
+        echo "Added to $PROFILE. Run 'source $PROFILE' or open a new shell to pick it up."
+      else
+        echo "Skipped. Add this to your shell profile to use installed commands:"
+        echo "  $PATH_LINE"
+      fi
+    fi
+    ;;
+esac
