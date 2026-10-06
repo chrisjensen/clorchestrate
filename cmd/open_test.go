@@ -157,7 +157,7 @@ func TestBuildRemoteCmd_NoClaude(t *testing.T) {
 		t.Run("local/"+c.name, func(t *testing.T) {
 			cfg := &config.Config{Server: ""}
 			got := buildRemoteCmd(cfg, c.mode, "h", "mycon_h", "", wd, "cd "+wd)
-			want := "screen -S mycon_h bash -c 'cd ~/src/extractor-branch-x && exec bash -l'"
+			want := "bash -c 'cd ~/src/extractor-branch-x && exec bash -l'"
 			if got != want {
 				t.Errorf("got %q\nwant %q", got, want)
 			}
@@ -196,7 +196,7 @@ func TestBuildRemoteCmd_LaunchCmdWithPromptSubstitution(t *testing.T) {
 	// bash -c argument.
 	localCfg := &config.Config{Server: ""}
 	gotLocal := buildRemoteCmd(localCfg, ModeFullTask, "h", "mycon_h", "", wd, launchCmd)
-	wantLocal := `screen -S mycon_h bash -c 'cd ~/src/extractor-branch-x && headclaude --permission-mode plan "$(cat /tmp/task-h.prompt.md)" && exec bash -l'`
+	wantLocal := `bash -c 'cd ~/src/extractor-branch-x && headclaude --permission-mode plan "$(cat /tmp/task-h.prompt.md)" && exec bash -l'`
 	if gotLocal != wantLocal {
 		t.Errorf("got %q\nwant %q", gotLocal, wantLocal)
 	}

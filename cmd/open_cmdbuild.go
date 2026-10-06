@@ -49,20 +49,19 @@ func escapeForSSHDoubleQuotes(s string) string {
 // buildRemoteCmd is the command the iTerm tab (or current terminal) runs
 // first: connect to an interactive screen session. No setup happens inside
 // screen — that's done by runSetup before the tab opens. When cfg.Server is
-// "" the commands run locally without SSH. launchCmd, when non-empty, runs
-// inside the screen session before the login shell takes over (e.g. cd into
-// worktreeDir, or the full cd+claude followup for the current-terminal path,
-// which has no AppleScript-typed-followup step available).
+// "" the commands run locally without SSH, and without screen — there's no
+// connection to a local machine to lose, so there's nothing to reattach to.
+// launchCmd, when non-empty, runs inside the screen session (or, locally, the
+// shell) before the login shell takes over (e.g. cd into worktreeDir, or the
+// full cd+claude followup for the current-terminal path, which has no
+// AppleScript-typed-followup step available).
 func buildRemoteCmd(cfg *config.Config, mode Mode, handle, sessionName, existingSessID, worktreeDir, launchCmd string) string {
 	if cfg.Server == "" {
 		switch mode {
 		case ModeFullTask, ModeWorktree:
-			if existingSessID != "" {
-				return fmt.Sprintf("screen -r %s", existingSessID)
-			}
-			return fmt.Sprintf("screen -S %s %s", sessionName, screenShellCmd(launchCmd))
+			return screenShellCmd(launchCmd)
 		case ModeHandleSession:
-			return fmt.Sprintf("screen -S %s bash -c 'cd %s && exec bash -l'", sessionName, cfg.RemoteRepo)
+			return fmt.Sprintf("bash -c 'cd %s && exec bash -l'", cfg.RemoteRepo)
 		case ModeBareSession:
 			return fmt.Sprintf("cd %s && exec bash -l", cfg.RemoteRepo)
 		}

@@ -92,8 +92,13 @@ func killSession(server, sessionID string) error {
 // --fresh, killing it first) and reports how to proceed: existingSessID is the
 // "PID.name" id to reattach to, or "" when none exists; skip is true when the
 // caller must not launch (session exists but is attached — the user must take
-// it over explicitly with --fresh).
+// it over explicitly with --fresh). Local sessions (cfg.Server == "") don't
+// use screen at all — there's no connection to a local machine to lose, so
+// there's nothing to find or reattach to.
 func checkExistingSession(cfg *config.Config, fresh bool, sessionName, worktreeBase string) (existingSessID string, skip bool) {
+	if cfg.Server == "" {
+		return "", false
+	}
 	// findSession checks sessionName first, then falls back to worktreeBase so
 	// that sessions created by `reconnect --restart` (named after the worktree
 	// directory) are detected even when the open-style name doesn't match.
