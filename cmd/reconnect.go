@@ -502,6 +502,7 @@ func reconnectRestart(args []string) error {
 					TabTitle:    base,
 					RemoteCmd:   remoteCmd,
 					FollowupCmd: "headclaude --continue",
+					LocalMode:   server == "",
 				}); err != nil {
 					fmt.Fprintf(os.Stderr, "warning: could not open tab for %s: %v\n", dir, err)
 				}

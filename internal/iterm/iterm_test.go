@@ -81,6 +81,26 @@ func TestBuildAppleScript_WithFollowup(t *testing.T) {
 	}
 }
 
+func TestBuildAppleScript_LocalMode_WithFollowup(t *testing.T) {
+	got := BuildAppleScript(TabOptions{
+		RemoteCmd:   "bash -l",
+		FollowupCmd: `claude "hi"`,
+		LocalMode:   true,
+	})
+	if !strings.Contains(got, "bash -l") {
+		t.Errorf("missing remote cmd:\n%s", got)
+	}
+	if strings.Contains(got, "priorContent") || strings.Contains(got, "stableCount") {
+		t.Errorf("local mode should not use growth-polling loop:\n%s", got)
+	}
+	if !strings.Contains(got, "delay 0.3") {
+		t.Errorf("expected fixed delay before followup:\n%s", got)
+	}
+	if !strings.Contains(got, `claude \"hi\"`) {
+		t.Errorf("missing escaped followup:\n%s", got)
+	}
+}
+
 func TestBuildAppleScript_NoFollowup(t *testing.T) {
 	got := BuildAppleScript(TabOptions{RemoteCmd: "ssh myserver"})
 	if strings.Contains(got, "priorContent") {

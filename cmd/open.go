@@ -322,6 +322,7 @@ func launchSession(cfg *config.Config, configPath, handle string, opts openOptio
 			TabColorHex: tabColor,
 			RemoteCmd:   remoteCmd,
 			FollowupCmd: followup,
+			LocalMode:   cfg.Server == "",
 		})
 	}
 	// The current terminal has no AppleScript-typed followup step, so the

@@ -13,6 +13,7 @@ type TabOptions struct {
 	TabTitle    string // optional; sets the tab/session name, overriding iTerm2's automatic naming
 	RemoteCmd   string // the shell command the new tab will run
 	FollowupCmd string // optional; typed once a shell prompt is detected after RemoteCmd
+	LocalMode   bool   // true when RemoteCmd has no SSH connection to wait on — skip output-growth polling and use a short fixed delay before typing FollowupCmd
 }
 
 // WriteTabColor emits iTerm2 escape sequences to w to set the current
@@ -55,7 +56,14 @@ func BuildAppleScript(opts TabOptions) string {
 	firstLine := fmt.Sprintf(`      write text "%s"`, appleScriptEscape(colorCmd+opts.RemoteCmd))
 
 	extra := ""
-	if opts.FollowupCmd != "" {
+	if opts.FollowupCmd != "" && opts.LocalMode {
+		// No SSH connection to wait on, so there's no banner/MOTD/prompt
+		// output to poll for — just give the local login shell a moment to
+		// start before typing the followup.
+		extra = fmt.Sprintf(`
+      delay 0.3
+      write text "%s"`, appleScriptEscape(opts.FollowupCmd))
+	} else if opts.FollowupCmd != "" {
 		// Poll contents of the tab until something is waiting for input:
 		//   1. Content has grown (SSH produced output — banner, MOTD, or prompt)
 		//   2. Content has been stable for ~300ms (nothing printing right now)
