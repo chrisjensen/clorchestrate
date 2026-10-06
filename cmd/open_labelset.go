@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chrisjensen/clorchestrate/internal/clilog"
 	"github.com/chrisjensen/clorchestrate/internal/config"
 )
 
@@ -39,11 +40,11 @@ func launchLabelSet(configPath, handle, baseBranch, baseRef string, cfg *config.
 		if baseRef != "" {
 			ahead, err := branchAheadCount(cfg.Server, worktreeDir, baseRef)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  warning: could not check commits ahead for %s: %v — proceeding with planning session\n", branch, err)
+				clilog.Printf(os.Stderr, "  warning: could not check commits ahead for %s: %v — proceeding with planning session\n", branch, err)
 				ahead = 0
 			}
 			if ahead > 0 {
-				fmt.Fprintf(os.Stderr, "  Branch is %d commit(s) ahead of %s — opening shell in worktree (no Claude)\n", ahead, baseRef)
+				clilog.Printf(os.Stderr, "  Branch is %d commit(s) ahead of %s — opening shell in worktree (no Claude)\n", ahead, baseRef)
 			}
 			opts.noClaude = ahead > 0
 		}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chrisjensen/clorchestrate/internal/clilog"
 	"github.com/chrisjensen/clorchestrate/internal/conffile"
 	"github.com/chrisjensen/clorchestrate/internal/config"
 	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
@@ -166,7 +167,7 @@ func runSessionSetup(cfg *config.Config, mode Mode, opts openOptions, handle, br
 	if location == "" {
 		location = "local"
 	}
-	fmt.Fprintf(os.Stderr, "Running setup for %s on %s…\n", handle, location)
+	clilog.Printf(os.Stderr, "Running setup for %s on %s…\n", handle, location)
 	if err := syncServerScripts(cfg.Server); err != nil {
 		return err
 	}
@@ -188,6 +189,6 @@ func runSessionSetup(cfg *config.Config, mode Mode, opts openOptions, handle, br
 	if err := runSetup(cfg.Server, plan.slug); err != nil {
 		return fmt.Errorf("setup failed: %w", err)
 	}
-	fmt.Fprintln(os.Stderr, "Setup complete — launching session.")
+	clilog.Printf(os.Stderr, "Setup complete — launching session.\n")
 	return nil
 }

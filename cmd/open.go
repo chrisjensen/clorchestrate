@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chrisjensen/clorchestrate/internal/clilog"
 	"github.com/chrisjensen/clorchestrate/internal/config"
 	"github.com/chrisjensen/clorchestrate/internal/iterm"
 	"github.com/chrisjensen/clorchestrate/internal/sync"
@@ -363,6 +364,6 @@ func syncServerScripts(server string) error {
 		specs[i] = sync.Script{Name: s.Name, Content: s.Content, Dir: s.Dir}
 	}
 	return sync.SyncScripts(server, specs, sync.DefaultRunner, func(format string, a ...any) {
-		fmt.Fprintf(os.Stderr, format, a...)
+		clilog.Printf(os.Stderr, format, a...)
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chrisjensen/clorchestrate/internal/clilog"
 	"github.com/chrisjensen/clorchestrate/internal/config"
 	"github.com/chrisjensen/clorchestrate/internal/iterm"
 	"github.com/chrisjensen/clorchestrate/internal/remoteexec"
@@ -106,19 +107,19 @@ func checkExistingSession(cfg *config.Config, fresh bool, sessionName, worktreeB
 
 	if fresh {
 		if id, _ := findSession(); id != "" {
-			fmt.Fprintf(os.Stderr, "--fresh: killing existing screen session %s (%s)\n", sessionName, id)
+			clilog.Printf(os.Stderr, "--fresh: killing existing screen session %s (%s)\n", sessionName, id)
 			if err := killSession(cfg.Server, id); err != nil {
-				fmt.Fprintf(os.Stderr, "  warning: kill failed: %v\n", err)
+				clilog.Printf(os.Stderr, "  warning: kill failed: %v\n", err)
 			}
 		}
 	}
 	id, state := findSession()
 	if id != "" && state != "Detached" {
-		fmt.Fprintf(os.Stderr, "screen session %s exists but is %s — skipping (use --fresh to take over)\n", sessionName, state)
+		clilog.Printf(os.Stderr, "screen session %s exists but is %s — skipping (use --fresh to take over)\n", sessionName, state)
 		return "", true
 	}
 	if id != "" {
-		fmt.Fprintf(os.Stderr, "screen session %s exists and is Detached (%s) — reattaching (re-run with --fresh to start over)\n", sessionName, id)
+		clilog.Printf(os.Stderr, "screen session %s exists and is Detached (%s) — reattaching (re-run with --fresh to start over)\n", sessionName, id)
 	}
 	return id, false
 }

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/chrisjensen/clorchestrate/internal/clilog"
 	"github.com/chrisjensen/clorchestrate/internal/github"
 )
 
@@ -44,7 +45,7 @@ func (r *Resolver) Resolve(server, remoteRepo, branchRepo, issueRepo string) (st
 
 	branch, warning := detect(server, remoteRepo, branchRepo, issueRepo)
 	if warning != "" {
-		fmt.Fprintln(os.Stderr, warning)
+		clilog.Printf(os.Stderr, "%s\n", warning)
 	}
 	r.cache[key] = branch
 	return branch, nil

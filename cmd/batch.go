@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/chrisjensen/clorchestrate/internal/branchdetect"
+	"github.com/chrisjensen/clorchestrate/internal/clilog"
 	"github.com/chrisjensen/clorchestrate/internal/config"
 	"github.com/chrisjensen/clorchestrate/internal/github"
 	"github.com/chrisjensen/clorchestrate/internal/iterm"
@@ -155,7 +156,7 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 
 	for _, t := range tasks {
 		if len(cfg.Packages) > 0 && t.Package == "" {
-			fmt.Fprintf(os.Stderr, "error: task %q has no 'package:' but config defines packages — skipping\n", t.Handle)
+			clilog.Printf(os.Stderr, "error: task %q has no 'package:' but config defines packages — skipping\n", t.Handle)
 			continue
 		}
 
@@ -197,7 +198,7 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 					return fmt.Errorf("task %s: check issue state: %w", t.Handle, err)
 				}
 				if closed {
-					fmt.Fprintf(os.Stderr, "Skipping %q (#%s): issue is already closed\n", t.Handle, t.IssueNum)
+					clilog.Printf(os.Stderr, "Skipping %q (#%s): issue is already closed\n", t.Handle, t.IssueNum)
 					continue
 				}
 			}
@@ -208,7 +209,7 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 			resolveBranch := func(label string) (string, error) {
 				labelBranch := baseBranchName + "-" + label
 				if t.IssueNum == "" {
-					fmt.Fprintf(os.Stderr, "No-issue task %q/%s — branch: %s\n", t.Handle, label, labelBranch)
+					clilog.Printf(os.Stderr, "No-issue task %q/%s — branch: %s\n", t.Handle, label, labelBranch)
 					return labelBranch, nil
 				}
 				// Check if this label's branch is already linked to the issue.
@@ -219,12 +220,12 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 					}
 					for _, b := range existing {
 						if b == labelBranch {
-							fmt.Fprintf(os.Stderr, "Reusing existing branch for %q/%s (#%s): %s\n", t.Handle, label, t.IssueNum, labelBranch)
+							clilog.Printf(os.Stderr, "Reusing existing branch for %q/%s (#%s): %s\n", t.Handle, label, t.IssueNum, labelBranch)
 							return labelBranch, nil
 						}
 					}
 				}
-				fmt.Fprintf(os.Stderr, "Creating branch for %q/%s (#%s from %s)...\n", t.Handle, label, t.IssueNum, base)
+				clilog.Printf(os.Stderr, "Creating branch for %q/%s (#%s from %s)...\n", t.Handle, label, t.IssueNum, base)
 				created, err := github.DevelopBranch(github.DevelopArgs{
 					IssueNum:   t.IssueNum,
 					IssueRepo:  effectiveCfg.IssueRepo,
@@ -236,7 +237,7 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 				if err != nil {
 					return "", fmt.Errorf("task %s label %s: %w", t.Handle, label, err)
 				}
-				fmt.Fprintf(os.Stderr, "  Branch: %s\n", created)
+				clilog.Printf(os.Stderr, "  Branch: %s\n", created)
 				return created, nil
 			}
 
@@ -259,7 +260,7 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 		if t.IssueNum == "" {
 			// No issue — derive branch name from handle.
 			branch = deriveBranchBase(effectiveCfg.BranchNameFormat, "", t.Handle)
-			fmt.Fprintf(os.Stderr, "No-issue task %q — branch: %s\n", t.Handle, branch)
+			clilog.Printf(os.Stderr, "No-issue task %q — branch: %s\n", t.Handle, branch)
 		} else {
 			if !forceBranch {
 				existing, err := github.ListLinkedBranches(t.IssueNum, effectiveCfg.IssueRepo)
@@ -268,7 +269,7 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 				}
 				if len(existing) > 0 {
 					branch = existing[0]
-					fmt.Fprintf(os.Stderr, "Reusing existing branch for %q (#%s): %s\n", t.Handle, t.IssueNum, branch)
+					clilog.Printf(os.Stderr, "Reusing existing branch for %q (#%s): %s\n", t.Handle, t.IssueNum, branch)
 				}
 			}
 
@@ -278,10 +279,10 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 					return fmt.Errorf("task %s: check issue state: %w", t.Handle, err)
 				}
 				if closed {
-					fmt.Fprintf(os.Stderr, "Skipping %q (#%s): issue is already closed\n", t.Handle, t.IssueNum)
+					clilog.Printf(os.Stderr, "Skipping %q (#%s): issue is already closed\n", t.Handle, t.IssueNum)
 					continue
 				}
-				fmt.Fprintf(os.Stderr, "Creating branch for %q (#%s from %s)...\n", t.Handle, t.IssueNum, base)
+				clilog.Printf(os.Stderr, "Creating branch for %q (#%s from %s)...\n", t.Handle, t.IssueNum, base)
 				branch, err = github.DevelopBranch(github.DevelopArgs{
 					IssueNum:         t.IssueNum,
 					IssueRepo:        effectiveCfg.IssueRepo,
@@ -293,18 +294,18 @@ func batchRun(configPath, tasksPath string, forceBranch, fresh bool, benchmark s
 				if err != nil {
 					return fmt.Errorf("task %s: %w", t.Handle, err)
 				}
-				fmt.Fprintf(os.Stderr, "  Branch: %s\n", branch)
+				clilog.Printf(os.Stderr, "  Branch: %s\n", branch)
 			}
 		}
 
 		worktreeDir := worktreePath(effectiveCfg.RemoteRepo, branch, effectiveCfg.WorktreePrefix)
 		ahead, err := branchAheadCount(effectiveCfg.Server, worktreeDir, base)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  warning: could not check commits ahead for %s: %v — proceeding with planning session\n", branch, err)
+			clilog.Printf(os.Stderr, "  warning: could not check commits ahead for %s: %v — proceeding with planning session\n", branch, err)
 			ahead = 0
 		}
 		if ahead > 0 {
-			fmt.Fprintf(os.Stderr, "  Branch is %d commit(s) ahead of %s — opening shell in worktree (no Claude)\n", ahead, base)
+			clilog.Printf(os.Stderr, "  Branch is %d commit(s) ahead of %s — opening shell in worktree (no Claude)\n", ahead, base)
 		}
 
 		// A single 'command:' label picks the launcher; a multi-label list would
@@ -390,10 +391,10 @@ func startPackages(cfg *config.Config, configID, configPath string) error {
 		sessionName := configID + "_pkg_" + pkg.Name
 		id, state := findExistingSession(cfg.Server, sessionName)
 		if id != "" {
-			fmt.Fprintf(os.Stderr, "Package %q: session %s already %s — skipping\n", pkg.Name, sessionName, state)
+			clilog.Printf(os.Stderr, "Package %q: session %s already %s — skipping\n", pkg.Name, sessionName, state)
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "Starting package %q in session %s\n", pkg.Name, sessionName)
+		clilog.Printf(os.Stderr, "Starting package %q in session %s\n", pkg.Name, sessionName)
 
 		// Runner color: package_runner_color → package iterm_tab_color → global iterm_tab_color
 		runnerColorRaw := pkg.PackageRunnerColor
