@@ -1,0 +1,30 @@
+# Example config for clorchestrate
+
+# Context injected into the planning prompt for every task in this config.
+# Can be overridden per [[package]].
+planning_context = """
+Implement a solution to the issue
+
+Once you've made a plan, launch a subagent to review the plan against the original requirements and
+the architecture and patterns of the codebase to ensure the plan both addresses the requirements
+and does so in a way that is consistent with the codebase and chooses reuse over duplication when appropriate.
+"""
+
+# Define the different commands
+[[command]]
+label   = "claude"
+cmd     = "claude --model sonnet"
+
+[[command]]
+label   = "opus"
+cmd     = "claude --model opus"
+
+# Define the repos that it should create worktree's from
+[[package]]
+name            = "test-api"
+remote_repo     = "~/src/test-data-api"
+branch_repo     = "mosaic-code-coop/test-data-api"
+worktree_prefix = "test-api"
+
+# test this by running
+./clorchestrate batch ./example/test.toml ./example/test.md
