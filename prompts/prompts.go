@@ -9,6 +9,9 @@ import (
 //go:embed prompt.txt
 var promptTmpl string
 
+//go:embed coordinator.txt
+var coordinatorTmpl string
+
 //go:embed eval.txt
 var evalTmpl string
 
@@ -41,6 +44,13 @@ type EvalData struct {
 
 func Prompt(data PromptData) (string, error) {
 	return render(promptTmpl, data)
+}
+
+// Coordinator renders the pool coordinator's requirements and review
+// instructions. It reuses PromptData: the issue fields describe the shared
+// issue, and Description is the task file's body.
+func Coordinator(data PromptData) (string, error) {
+	return render(coordinatorTmpl, data)
 }
 
 func Eval(data EvalData) (string, error) {

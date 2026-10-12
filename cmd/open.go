@@ -37,8 +37,9 @@ type openOptions struct {
 	// Pool coordination (multi-session benchmark runs). role is set for pool
 	// sessions. Workers run in <runDir>/<benchmarkLabel>, prompted with their
 	// task body plus an instruction to use the pool-worker skill; the
-	// coordinator runs in runDir itself and is prompted with
-	// /pool-coordinate <coordinatorBase>. See the pool-worker / pool-coordinate
+	// coordinator runs in runDir itself and is prompted with the requirements
+	// to review against plus an instruction to use the pool-coordinate skill
+	// with <coordinatorBase>. See the pool-worker / pool-coordinate
 	// skills.
 	poolRole        poolRole
 	runDir          string

@@ -1,6 +1,6 @@
 ---
 name: pool-coordinate
-description: Run an A/B test of worker implementations — merge their plans, then review the implementations and promote the best as a PR. Invoked as `/pool-coordinate <base>`.
+description: Run an A/B test of worker implementations — merge their plans, then review the plans and implementations against the original requirements and promote the best as a PR. Invoked as `/pool-coordinate <base>`.
 ---
 
 The run dir is your CWD; `pool-signal.sh` is on `PATH` (installed to `~/.local/bin` by
@@ -8,16 +8,20 @@ clorchestrate's `install.sh`). The **workers are the
 subdirectories of the run dir** — each is a worktree named for its label (signal
 sentinels are files, not dirs). Derive a worker's branch with
 `git -C <label> rev-parse --abbrev-ref HEAD`. `<base>` (the PR target branch) is the
-skill argument. No manifest — drive everything off the subdir list. N-agnostic.
+skill argument (or stated in the prompt). The **requirements** are the task above
+(also mirrored at `task.md` in the run dir, written by the workers) and, when it
+names one, the GitHub issue and all its comments (`gh issue view <n> --comments`).
+No manifest — drive everything off the subdir list. N-agnostic.
 
 1. **Wait for all plans** (backgrounded via `run_in_background`):
    `pool-signal.sh wait . plan`.
-2. **Merge.** Read each `<label>/PLAN.md`, synthesize the strongest hybrid with
-   `/plan-review`, and write it to `PLAN.hybrid.md`.
+2. **Merge.** First list every requirement. Read each `<label>/PLAN.md`, check it
+   against that list (covered, partial, missing, or unrequested extras), synthesize
+   the strongest hybrid with `/plan-review`, and write it to `PLAN.hybrid.md`.
 3. **Get approval before releasing workers.** Summarize for the user: the key
    decisions made while merging, the final `PLAN.hybrid.md`, and anything else
-   worth flagging (conflicting approaches, risks, things dropped from a
-   worker's plan). Only once the user approves, release the workers:
+   worth flagging (any requirement `PLAN.hybrid.md` leaves uncovered, conflicting
+   approaches, risks, things dropped from a worker's plan). Only once the user approves, release the workers:
    `pool-signal.sh merged .`.
 4. **Wait for all implementations:** `pool-signal.sh wait . impl`.
 
@@ -27,8 +31,9 @@ anyway); the session resumes when the backgrounded command completes. To check i
 progress, read the backgrounded task's own output instead.
 
 5. **Review + promote.** For each worker, review `git -C <label> diff
-   origin/<base>...HEAD` with `/feature-merge` + git-diff-reviewer. Pick the single best
-   implementation, and identify any features from the other worktrees worth folding in.
+   origin/<base>...HEAD` against the requirements list, and with `/feature-merge` +
+   git-diff-reviewer. Pick the single best implementation (requirement coverage
+   first), and identify any features from the other worktrees worth folding in.
    Present the merge plan to the user for approval **before** merging any worktree or
    opening a PR. On approval, open the PR from the winning branch with `/pr`.
 6. **Evaluate.** Once promoted, invoke `/pool-evaluate <base> <selected-label>`

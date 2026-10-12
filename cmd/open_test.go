@@ -246,7 +246,7 @@ func TestPoolLaunchPrompt(t *testing.T) {
 	if got := poolLaunchPrompt(poolRoleWorker, "", ""); got != "Use the pool-worker skill to implement this task." {
 		t.Errorf("worker with no task body: got %q", got)
 	}
-	if got := poolLaunchPrompt(poolRoleCoordinator, "Implement issue #42.", "main"); got != "/pool-coordinate main" {
+	if got := poolLaunchPrompt(poolRoleCoordinator, "Review against issue #42.", "main"); got != "Review against issue #42.\n\nUse the pool-coordinate skill, with PR base branch main." {
 		t.Errorf("coordinator: got %q", got)
 	}
 }

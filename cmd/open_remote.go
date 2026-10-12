@@ -110,6 +110,19 @@ func buildTaskBody(cfg *config.Config, mode Mode, opts openOptions, issueNum str
 		}
 		return p, nil
 	}
+	if opts.poolRole == poolRoleCoordinator {
+		p, err := prompts.Coordinator(prompts.PromptData{
+			PlanningContext: cfg.PlanningContext,
+			IssueNum:        issueNum,
+			IssueRepo:       cfg.IssueRepo,
+			IssueURL:        fmt.Sprintf("https://github.com/%s/issues/%s", cfg.IssueRepo, issueNum),
+			Description:     opts.extraContext,
+		})
+		if err != nil {
+			return "", fmt.Errorf("building coordinator prompt: %w", err)
+		}
+		return p, nil
+	}
 	if opts.poolRole != "" || (mode == ModeWorktree && (opts.extraContext != "" || opts.benchmarkLabel != "")) {
 		p, err := prompts.Prompt(prompts.PromptData{
 			PlanningContext: cfg.PlanningContext,
@@ -126,8 +139,8 @@ func buildTaskBody(cfg *config.Config, mode Mode, opts openOptions, issueNum str
 // sessionPromptFile writes the session's launch prompt file, and for pool
 // workers the shared task.md. A worker's launch prompt is its task body (so
 // the chat history shows what it was asked to do) plus an instruction to work
-// it via the pool-worker skill; the coordinator has no task body, only
-// /pool-coordinate <base>. Only workers write task.md: they run first and
+// it via the pool-worker skill; the coordinator's is the requirements and review
+// instructions plus an instruction to run the pool-coordinate skill. Only workers write task.md: they run first and
 // (for issue tasks) render the full issue prompt, whereas the coordinator has
 // no issue and would otherwise clobber the run dir's task.md with an empty
 // body. Non-pool benchmark sessions get a .clorchestrate-done instruction
