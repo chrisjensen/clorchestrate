@@ -359,13 +359,25 @@ func completeConfigPaths(cmd *cobra.Command, args []string, toComplete string) (
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
+// syncedServers tracks which servers have already had their scripts verified
+// up to date in this process, so a batch run with many sessions only pays
+// the sync round-trip once per server instead of once per session.
+var syncedServers = map[string]bool{}
+
 func syncServerScripts(server string) error {
+	if syncedServers[server] {
+		return nil
+	}
 	all := scripts.All()
 	specs := make([]sync.Script, len(all))
 	for i, s := range all {
 		specs[i] = sync.Script{Name: s.Name, Content: s.Content, Dir: s.Dir}
 	}
-	return sync.SyncScripts(server, specs, sync.DefaultRunner, func(format string, a ...any) {
+	if err := sync.SyncScripts(server, specs, sync.DefaultRunner, func(format string, a ...any) {
 		clilog.Printf(os.Stderr, format, a...)
-	})
+	}); err != nil {
+		return err
+	}
+	syncedServers[server] = true
+	return nil
 }
