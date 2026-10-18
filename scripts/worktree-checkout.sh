@@ -7,6 +7,9 @@
 # <worktree>/.setup.log. Intended to be run via plain (non-tty) SSH.
 set -euo pipefail
 
+log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$1"; }
+log_err() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$1" >&2; }
+
 HANDLE="$1"
 CONF="/tmp/task-${HANDLE}.conf"
 [[ ! -f "$CONF" ]] && { echo "No task config found at $CONF"; exit 1; }
@@ -23,14 +26,14 @@ prepare_run_dir() {
   mkdir -p "$RUN_DIR"
   if [[ -f "$TASK_MD_SRC" ]]; then
     cp "$TASK_MD_SRC" "$RUN_DIR/task.md"
-    echo "Wrote $RUN_DIR/task.md"
+    log "Wrote $RUN_DIR/task.md"
   fi
 }
 
 # Coordinator: RUN_DIR but no worktree of its own — just prepare the run dir.
 if [[ -n "$RUN_DIR" && -z "${WORKTREE_DIR:-}" ]]; then
-  echo "=== Coordinator run-dir setup ==="
-  echo "  Run dir: $RUN_DIR"
+  log "=== Coordinator run-dir setup ==="
+  log "  Run dir: $RUN_DIR"
   prepare_run_dir
   exit 0
 fi
@@ -51,31 +54,31 @@ start_background_setup() {
   if [[ ! -d "$REPO_ROOT/node_modules" ]] && [[ -z "$POST_SETUP_CMD" ]]; then
     return
   fi
-  echo "Background setup starting: tail -f $WORKTREE_DIR/.setup.log"
+  log "Background setup starting: tail -f $WORKTREE_DIR/.setup.log"
   (
     cd "$WORKTREE_DIR"
     if [[ -d "$REPO_ROOT/node_modules" ]] && [[ ! -e "$WORKTREE_DIR/node_modules" ]]; then
-      echo "Symlinking node_modules..."
+      log "Symlinking node_modules..."
       ln -s "$REPO_ROOT/node_modules" "$WORKTREE_DIR/node_modules"
     fi
     if [[ -n "$POST_SETUP_CMD" ]]; then
-      echo "Running post-setup: $POST_SETUP_CMD"
+      log "Running post-setup: $POST_SETUP_CMD"
       bash -lc "$POST_SETUP_CMD"
     fi
-    echo "=== Background setup complete ==="
+    log "=== Background setup complete ==="
   ) > "$WORKTREE_DIR/.setup.log" 2>&1 &
   disown
 }
 
 # --- Resume path: worktree already exists ---
 if [[ -d "$WORKTREE_DIR" ]]; then
-  echo "=== Resuming existing worktree ==="
-  echo "  Path:   $WORKTREE_DIR"
-  echo "  Branch: $BRANCH"
+  log "=== Resuming existing worktree ==="
+  log "  Path:   $WORKTREE_DIR"
+  log "  Branch: $BRANCH"
   if [[ -d "$WORKTREE_DIR/.serena" ]]; then
-    echo "  serena: present"
+    log "  serena: present"
   else
-    echo "  serena: not found"
+    log "  serena: not found"
   fi
   start_background_setup
   exit 0
@@ -105,7 +108,7 @@ create_worktree() {
   # without `git worktree remove` doesn't block re-adding it here.
   git -C "$REPO_ROOT" worktree prune
 
-  echo "Checking out $BRANCH into $WORKTREE_DIR..."
+  log "Checking out $BRANCH into $WORKTREE_DIR..."
   if [[ -d "$REPO_ROOT/.beads" ]] && [[ "$BEADS_COMMITTED" == false ]]; then
     # Stealth beads repo: use `bd worktree create` so the new worktree shares
     # the main repo's .beads database via a redirect. bd attaches an existing
@@ -136,10 +139,10 @@ MAX_ATTEMPTS=3
 attempt=1
 until create_worktree; do
   if [[ $attempt -ge $MAX_ATTEMPTS ]]; then
-    echo "error: worktree setup failed after $MAX_ATTEMPTS attempts" >&2
+    log_err "error: worktree setup failed after $MAX_ATTEMPTS attempts"
     exit 1
   fi
-  echo "worktree setup failed (attempt $attempt/$MAX_ATTEMPTS) — retrying in 5s..." >&2
+  log_err "worktree setup failed (attempt $attempt/$MAX_ATTEMPTS) — retrying in 5s..."
   sleep 5
   attempt=$((attempt + 1))
 done
@@ -154,7 +157,7 @@ if [[ -d "$SERENA_SRC/.serena" ]]; then
     WORKTREE_NAME="$(basename "$WORKTREE_DIR")"
     sed -i "s|^project_name:.*|project_name: \"$WORKTREE_NAME\"|" "$local_yml"
   fi
-  echo "Seeded .serena from $SERENA_SRC (cache excluded)"
+  log "Seeded .serena from $SERENA_SRC (cache excluded)"
 fi
 
 if [[ -d "$REPO_ROOT/.claude" ]]; then
@@ -167,30 +170,30 @@ if [[ -d "$REPO_ROOT/.claude" ]]; then
   done
   if [[ -z "$(find "$WORKTREE_DIR/.claude" -type f 2>/dev/null)" ]]; then
     rm -rf "$WORKTREE_DIR/.claude"
-    echo "Skipped .claude/ (no non-empty files)"
+    log "Skipped .claude/ (no non-empty files)"
   else
-    echo "Copied .claude/ (skills, settings)"
+    log "Copied .claude/ (skills, settings)"
   fi
 fi
 
 for doc_file in CLAUDE.md AGENTS.md; do
   if [[ -f "$REPO_ROOT/$doc_file" ]] && [[ ! -f "$WORKTREE_DIR/$doc_file" ]]; then
     cp "$REPO_ROOT/$doc_file" "$WORKTREE_DIR/$doc_file"
-    echo "Copied $doc_file"
+    log "Copied $doc_file"
   fi
 done
 
-[[ -f "$REPO_ROOT/.env" ]] && cp "$REPO_ROOT/.env" "$WORKTREE_DIR/.env" && echo "Copied .env"
+[[ -f "$REPO_ROOT/.env" ]] && cp "$REPO_ROOT/.env" "$WORKTREE_DIR/.env" && log "Copied .env"
 
 mkdir -p "$WORKTREE_DIR/resources/input"
 [[ -d "$RESOURCES/config" ]] && ln -s "$RESOURCES/config" "$WORKTREE_DIR/resources/config"
 [[ -d "$RESOURCES/input/local" ]] && ln -s "$RESOURCES/input/local" "$WORKTREE_DIR/resources/input/local"
 [[ -d "$RESOURCES/input/my" ]] && ln -s "$RESOURCES/input/my" "$WORKTREE_DIR/resources/input/my"
-echo "Symlinked resources"
+log "Symlinked resources"
 
 echo ""
-echo "=== Worktree ready ==="
-echo "  Path:   $WORKTREE_DIR"
-echo "  Branch: $BRANCH"
+log "=== Worktree ready ==="
+log "  Path:   $WORKTREE_DIR"
+log "  Branch: $BRANCH"
 
 start_background_setup

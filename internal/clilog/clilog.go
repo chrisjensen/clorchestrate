@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-// Printf writes a timestamp-prefixed, formatted line to w.
+// Printf writes a UTC timestamp-prefixed, formatted line to w. UTC (rather
+// than local wall-clock time) keeps these timestamps directly comparable to
+// the ones scripts/worktree-checkout.sh prints on the remote server, which
+// runs in a different timezone than the local machine.
 func Printf(w io.Writer, format string, a ...any) {
-	fmt.Fprintf(w, "[%s] "+format, append([]any{time.Now().Format("15:04:05.000")}, a...)...)
+	fmt.Fprintf(w, "[%s] "+format, append([]any{time.Now().UTC().Format("15:04:05.000")}, a...)...)
 }
