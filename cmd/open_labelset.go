@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/chrisjensen/clorchestrate/internal/clilog"
 	"github.com/chrisjensen/clorchestrate/internal/config"
@@ -24,11 +25,17 @@ func launchLabelSet(configPath, handle, baseBranch, baseRef string, cfg *config.
 	pool := len(labels) >= 2
 	runDir := worktreePath(cfg.RemoteRepo, baseBranch, cfg.WorktreePrefix)
 
-	for _, label := range labels {
-		branch, err := resolveBranch(label)
-		if err != nil {
-			return err
-		}
+	// Branch resolution (gh API calls — create or look up) doesn't touch the
+	// local git repo, so it's safe to run concurrently across labels even
+	// though the checkout loop below must stay sequential (worktree add
+	// writes to the shared .git/config).
+	branches, err := resolveBranchesConcurrently(labels, resolveBranch)
+	if err != nil {
+		return err
+	}
+
+	for i, label := range labels {
+		branch := branches[i]
 
 		worktreeDir := worktreePath(cfg.RemoteRepo, branch, cfg.WorktreePrefix)
 		if pool {
@@ -92,4 +99,28 @@ func worktreePath(remoteRepo, branch, prefix string) string {
 	}
 	sanitized := strings.ReplaceAll(branch, "/", "-")
 	return parent + "/" + prefix + "-" + sanitized
+}
+
+// resolveBranchesConcurrently runs resolveBranch for every label in parallel,
+// preserving label order in the returned slice. Returns the first error
+// encountered (if any); order of errors across labels is not meaningful
+// since they race.
+func resolveBranchesConcurrently(labels []string, resolveBranch func(label string) (string, error)) ([]string, error) {
+	branches := make([]string, len(labels))
+	errs := make([]error, len(labels))
+	var wg sync.WaitGroup
+	for i, label := range labels {
+		wg.Add(1)
+		go func(i int, label string) {
+			defer wg.Done()
+			branches[i], errs[i] = resolveBranch(label)
+		}(i, label)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return branches, nil
 }
