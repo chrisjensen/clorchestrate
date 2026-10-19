@@ -147,7 +147,11 @@ until create_worktree; do
   attempt=$((attempt + 1))
 done
 
-SERENA_SRC="$(git -C "$REPO_ROOT" worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
+# awk's `exit` would close the pipe as soon as it finds the first match,
+# which can SIGPIPE `git worktree list` (exit 141 under `set -o pipefail`)
+# once there's enough output that git is still writing when awk quits. Let
+# awk consume the whole stream and take the first match afterward instead.
+SERENA_SRC="$(git -C "$REPO_ROOT" worktree list --porcelain | awk '/^worktree /{print $2}' | head -n1)"
 if [[ -d "$SERENA_SRC/.serena" ]]; then
   # Copy .serena from main worktree, excluding cache/ (LSP index rebuilds automatically).
   rsync -a --exclude='cache/' "$SERENA_SRC/.serena/" "$WORKTREE_DIR/.serena/"
