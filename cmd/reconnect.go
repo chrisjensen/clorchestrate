@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ type plannedTab struct {
 func NewReconnectCmd() *cobra.Command {
 	var force bool
 	var restart bool
+	var pause int
 	cmd := &cobra.Command{
 		Use:   "reconnect [config]",
 		Short: "reconnect detached screen sessions",
@@ -47,19 +49,27 @@ forcibly reattach any matching session (via 'screen -dr'), detaching any
 currently-connected client.
 
 Pass --restart to enumerate worktree directories derived from each config and
-start a new screen session (running 'claude --continue') for any that does not
-already have one. Session names are the worktree directory basename.`,
+start a new screen session (running the configured claude command plus
+'--continue') for any that does not already have one. Session names are the
+worktree directory basename, except for pool/benchmark workers and their
+coordinator (named "<runDirBase>_<label>" / "<runDirBase>_coordinator" so
+they're unique across runs and groupable by --force).
+
+With --restart, --pause N (default 20) stops after every N new sessions
+started and waits for Enter before continuing, to avoid starting dozens of
+claude processes against disk at once. --pause 0 disables pausing.`,
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeConfigPaths,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if restart {
-				return reconnectRestart(args)
+				return reconnectRestart(args, pause)
 			}
 			return reconnectRun(args, force)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "forcibly reattach matching sessions using 'screen -dr'")
 	cmd.Flags().BoolVar(&restart, "restart", false, "start new sessions for worktree dirs that have no screen session")
+	cmd.Flags().IntVar(&pause, "pause", 20, "with --restart, pause for Enter after every N new sessions started (0 disables)")
 	return cmd
 }
 
@@ -159,12 +169,7 @@ func reconnectRun(args []string, force bool) error {
 				screenAction = "screen -dr"
 			}
 
-			var labels []string
-			for _, c := range e.cfg.Commands {
-				if c.Label != "" {
-					labels = append(labels, c.Label)
-				}
-			}
+			labels := configLabels(e.cfg)
 
 			var planned []plannedTab
 			for _, sess := range sessions {
@@ -307,6 +312,18 @@ func mergeLegacyCoordinatorGroups(planned []plannedTab, groups map[string][]int,
 	return filtered
 }
 
+// configLabels returns the non-empty command labels defined in cfg, in
+// config order.
+func configLabels(cfg *config.Config) []string {
+	var labels []string
+	for _, c := range cfg.Commands {
+		if c.Label != "" {
+			labels = append(labels, c.Label)
+		}
+	}
+	return labels
+}
+
 func loadAllConfigs() ([]configEntry, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -396,7 +413,7 @@ func allDigits(s string) bool {
 // reconnectRestart finds worktree directories for each config that have no
 // corresponding screen session and opens a new iTerm2 tab for each, running
 // claude --continue inside the worktree.
-func reconnectRestart(args []string) error {
+func reconnectRestart(args []string, pause int) error {
 	var entries []configEntry
 	if len(args) == 1 {
 		configPath, err := resolveConfigPath(args[0])
@@ -424,6 +441,7 @@ func reconnectRestart(args []string) error {
 		remoteRepo string
 		prefix     string
 		tabColor   string
+		cfg        *config.Config
 	}
 
 	byServer := map[string][]repoTarget{}
@@ -431,7 +449,7 @@ func reconnectRestart(args []string) error {
 		color := config.ResolveTabColor(e.cfg.ITermTabColor, e.path)
 		var targets []repoTarget
 		if len(e.cfg.Packages) == 0 {
-			targets = []repoTarget{{e.cfg.RemoteRepo, e.cfg.WorktreePrefix, color}}
+			targets = []repoTarget{{e.cfg.RemoteRepo, e.cfg.WorktreePrefix, color, e.cfg}}
 		}
 		for _, pkg := range e.cfg.Packages {
 			if pkg.RemoteRepo == "" {
@@ -445,12 +463,16 @@ func reconnectRestart(args []string) error {
 				pkg.RemoteRepo,
 				pkg.WorktreePrefix,
 				config.ResolveTabColor(pkgColor, e.path),
+				e.cfg,
 			})
 		}
 		for _, t := range targets {
 			byServer[e.cfg.Server] = append(byServer[e.cfg.Server], t)
 		}
 	}
+
+	started := 0
+	stdin := bufio.NewReader(os.Stdin)
 
 	for server, targets := range byServer {
 		sessionDirs, err := listSessionDirs(server)
@@ -474,43 +496,183 @@ func reconnectRestart(args []string) error {
 				prefix = repo[lastSlash+1:]
 			}
 
-			dirs, err := listWorktreeDirs(server, parent, prefix)
+			labels := configLabels(t.cfg)
+			var discovered []discoveredWorktree
+			for _, label := range labels {
+				found, err := discoverWorktrees(server, parent, prefix, label)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: could not list %q worktrees for %s: %v\n", label, t.remoteRepo, err)
+					continue
+				}
+				discovered = append(discovered, found...)
+			}
+
+			topDirs, err := listWorktreeDirs(server, parent, prefix)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "warning: could not list worktrees for %s: %v\n", t.remoteRepo, err)
 				continue
 			}
 
-			for _, dir := range dirs {
+			candidates := planRestartCandidates(t.cfg, labels, topDirs, discovered)
+
+			// Sibling restarts of the same pool run (coordinator + workers)
+			// share a runKey; give those a distinct, deterministic color
+			// (same scheme as reconnectRun's sibling grouping) instead of the
+			// config's single color, so they're visually grouped and runs
+			// are distinguishable from one another. A runKey with only one
+			// surviving candidate (its siblings already have live sessions)
+			// isn't a group, so it keeps the config's default color.
+			runKeyCounts := map[string]int{}
+			for _, target := range candidates {
+				if target.runKey != "" {
+					runKeyCounts[target.runKey]++
+				}
+			}
+
+			for _, dir := range sortedRestartDirs(candidates) {
 				if sessionDirs[dir] {
 					fmt.Fprintf(os.Stderr, "skipping %s — already open in a screen session\n", dir)
 					continue
 				}
-				base := dir[strings.LastIndex(dir, "/")+1:]
+				target := candidates[dir]
 				// Start screen with a login shell cd'd into the worktree, then
-				// type claude --continue as a followup (same pattern as open's
-				// noClaude path + buildFollowupCmd, so the login profile is
-				// sourced before claude runs).
+				// type the resolved claude command + --continue as a followup
+				// (same pattern as open's noClaude path + buildFollowupCmd, so
+				// the login profile is sourced before claude runs). Assumes
+				// every configured command accepts a trailing --continue flag
+				// the same way the default command does.
 				var remoteCmd string
 				if server == "" {
-					remoteCmd = fmt.Sprintf("screen -S %s bash -c 'cd %s && exec bash -l'", base, dir)
+					remoteCmd = fmt.Sprintf("screen -S %s bash -c 'cd %s && exec bash -l'", target.sessionName, dir)
 				} else {
-					remoteCmd = fmt.Sprintf(`ssh -t %s "screen -S %s bash -c 'cd %s && exec bash -l'"`, server, base, dir)
+					remoteCmd = fmt.Sprintf(`ssh -t %s "screen -S %s bash -c 'cd %s && exec bash -l'"`, server, target.sessionName, dir)
 				}
-				fmt.Fprintf(os.Stderr, "starting session %q for %s\n", base, dir)
+				tabColor := t.tabColor
+				if target.runKey != "" && runKeyCounts[target.runKey] >= 2 {
+					tabColor = config.RunGroupColor(target.runKey)
+				}
+				fmt.Fprintf(os.Stderr, "starting session %q for %s\n", target.sessionName, dir)
 				if err := iterm.OpenTab(iterm.TabOptions{
-					TabColorHex: t.tabColor,
-					TabTitle:    base,
+					TabColorHex: tabColor,
+					TabTitle:    target.sessionName,
 					RemoteCmd:   remoteCmd,
-					FollowupCmd: "headclaude --continue",
+					FollowupCmd: target.cmd + " --continue",
 					LocalMode:   server == "",
 				}); err != nil {
 					fmt.Fprintf(os.Stderr, "warning: could not open tab for %s: %v\n", dir, err)
+				}
+
+				started++
+				if pause > 0 && started%pause == 0 {
+					fmt.Fprintf(os.Stderr, "started %d sessions — press Enter to continue...\n", started)
+					stdin.ReadString('\n')
 				}
 			}
 		}
 	}
 
 	return nil
+}
+
+// restartTarget is the resolved command, screen session name, and
+// run-grouping key for one worktree directory restart will start a session
+// in. runKey is empty for worktrees that aren't part of a multi-session
+// pool/benchmark run.
+type restartTarget struct {
+	cmd         string
+	sessionName string
+	runKey      string
+}
+
+// planRestartCandidates resolves the claude command, screen session name,
+// and run-grouping key to use for every worktree directory a restart should
+// consider, covering three cases that mirror how launchLabelSet
+// (cmd/open_labelset.go) assigns commands when a session is first launched:
+//
+//   - a labeled worktree (legacy sibling <prefix>-<base>-<label>, or pool
+//     child <rundir>/<label>) uses cfg.CommandByLabel(label), grouped under
+//     its discoveredWorktree.taskKey. Its session name is the dir basename
+//     for the sibling layout (already unique: "<prefix>-<base>-<label>"), or
+//     "<runDirBase>_<label>" for the pool child layout — the bare label
+//     alone is not unique across different runs and matches none of
+//     reconnectRun's prefix matchers, so --force could never find or color
+//     it.
+//   - a pool run dir's root (the coordinator, found because one of its
+//     children is a discovered label dir) uses cfg.CommandByLabel(labels[0]),
+//     mirroring coordOpts.commandLabel = labels[0], grouped under the same
+//     taskKey as its workers, with session name "<runDirBase>_coordinator".
+//   - any other top-level worktree dir (a plain, unlabeled worktree) uses
+//     cfg.DefaultClaudeCmd(), its own dir basename as session name, and has
+//     no runKey (ungrouped).
+//
+// discovered is the concatenation of discoverWorktrees results for every
+// label; topDirs is the flat listWorktreeDirs glob result.
+func planRestartCandidates(cfg *config.Config, labels []string, topDirs []string, discovered []discoveredWorktree) map[string]restartTarget {
+	candidates := map[string]restartTarget{}
+	poolRunDirs := map[string]string{} // runDir -> taskKey
+
+	resolveLabel := func(label string) string {
+		cmd, err := cfg.CommandByLabel(label)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v; using default command\n", err)
+			return cfg.DefaultClaudeCmd()
+		}
+		return cmd
+	}
+
+	for _, w := range discovered {
+		label := labelOf(w, labels)
+		sessionName := filepath.Base(w.dir)
+		if w.runDir != "" {
+			sessionName = filepath.Base(w.runDir) + "_" + label
+		}
+		candidates[w.dir] = restartTarget{cmd: resolveLabel(label), sessionName: sessionName, runKey: w.taskKey}
+		if w.runDir != "" {
+			poolRunDirs[w.runDir] = w.taskKey
+		}
+	}
+
+	for _, dir := range topDirs {
+		if _, ok := candidates[dir]; ok {
+			continue // already resolved above as a legacy sibling worktree
+		}
+		if taskKey, ok := poolRunDirs[dir]; ok {
+			cmd := cfg.DefaultClaudeCmd()
+			if len(labels) > 0 {
+				cmd = resolveLabel(labels[0])
+			}
+			candidates[dir] = restartTarget{cmd: cmd, sessionName: filepath.Base(dir) + "_coordinator", runKey: taskKey}
+			continue
+		}
+		candidates[dir] = restartTarget{cmd: cfg.DefaultClaudeCmd(), sessionName: filepath.Base(dir)}
+	}
+
+	return candidates
+}
+
+// labelOf returns the label a discoveredWorktree was found under: its
+// directory basename for the pool child layout, or the basename's trailing
+// "-<label>" suffix for the legacy sibling layout.
+func labelOf(w discoveredWorktree, labels []string) string {
+	if w.runDir != "" {
+		return filepath.Base(w.dir)
+	}
+	base := filepath.Base(w.dir)
+	for _, label := range labels {
+		if strings.HasSuffix(base, "-"+label) {
+			return label
+		}
+	}
+	return ""
+}
+
+func sortedRestartDirs(m map[string]restartTarget) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // listSessionDirs returns the set of working directories currently held by

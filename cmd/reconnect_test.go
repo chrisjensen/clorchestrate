@@ -1,6 +1,10 @@
 package cmd
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/chrisjensen/clorchestrate/internal/config"
+)
 
 func TestRunKeyAndLabel(t *testing.T) {
 	labels := []string{"a", "b"}
@@ -76,5 +80,72 @@ func TestMergeLegacyCoordinatorGroups_NoFalseMerge(t *testing.T) {
 
 	if len(got) != 2 {
 		t.Errorf("groupOrder = %v, want no merge (no coordinator session present)", got)
+	}
+}
+
+func abZaiConfig() *config.Config {
+	return &config.Config{
+		Commands: []config.Command{
+			{Label: "claude", Cmd: "claude"},
+			{Label: "zai", Cmd: "zai"},
+		},
+	}
+}
+
+func TestPlanRestartCandidates_PoolLayout(t *testing.T) {
+	cfg := abZaiConfig()
+	labels := configLabels(cfg)
+	topDirs := []string{"/repo/myrepo-feature"}
+	discovered := []discoveredWorktree{
+		{dir: "/repo/myrepo-feature/claude", taskKey: "myrepo-feature", runDir: "/repo/myrepo-feature"},
+		{dir: "/repo/myrepo-feature/zai", taskKey: "myrepo-feature", runDir: "/repo/myrepo-feature"},
+	}
+
+	got := planRestartCandidates(cfg, labels, topDirs, discovered)
+
+	want := map[string]restartTarget{
+		"/repo/myrepo-feature/claude": {cmd: "claude", sessionName: "myrepo-feature_claude", runKey: "myrepo-feature"},
+		"/repo/myrepo-feature/zai":    {cmd: "zai", sessionName: "myrepo-feature_zai", runKey: "myrepo-feature"},
+		"/repo/myrepo-feature":        {cmd: "claude", sessionName: "myrepo-feature_coordinator", runKey: "myrepo-feature"}, // coordinator uses labels[0]
+	}
+	if len(got) != len(want) {
+		t.Fatalf("planRestartCandidates() = %v, want %v", got, want)
+	}
+	for dir, wantTarget := range want {
+		if got[dir] != wantTarget {
+			t.Errorf("candidates[%q] = %+v, want %+v", dir, got[dir], wantTarget)
+		}
+	}
+}
+
+func TestPlanRestartCandidates_PlainWorktree(t *testing.T) {
+	cfg := abZaiConfig()
+	labels := configLabels(cfg)
+	topDirs := []string{"/repo/myrepo-plain"}
+
+	got := planRestartCandidates(cfg, labels, topDirs, nil)
+
+	want := restartTarget{cmd: cfg.DefaultClaudeCmd(), sessionName: "myrepo-plain"}
+	if len(got) != 1 || got["/repo/myrepo-plain"] != want {
+		t.Errorf("planRestartCandidates() = %v, want %v", got, want)
+	}
+}
+
+func TestPlanRestartCandidates_LegacySiblingLayout(t *testing.T) {
+	cfg := abZaiConfig()
+	labels := configLabels(cfg)
+	topDirs := []string{"/repo/myrepo-feature-zai"}
+	discovered := []discoveredWorktree{
+		{dir: "/repo/myrepo-feature-zai", taskKey: "myrepo-feature"},
+	}
+
+	got := planRestartCandidates(cfg, labels, topDirs, discovered)
+
+	if len(got) != 1 {
+		t.Fatalf("planRestartCandidates() = %v, want exactly one candidate (no duplicate)", got)
+	}
+	want := restartTarget{cmd: "zai", sessionName: "myrepo-feature-zai", runKey: "myrepo-feature"}
+	if got["/repo/myrepo-feature-zai"] != want {
+		t.Errorf("candidates[%q] = %+v, want %+v", "/repo/myrepo-feature-zai", got["/repo/myrepo-feature-zai"], want)
 	}
 }
