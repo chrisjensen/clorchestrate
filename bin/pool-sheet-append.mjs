@@ -66,9 +66,29 @@ export function signJwt(serviceAccount, { now = Math.floor(Date.now() / 1000) } 
   return `${signingInput}.${base64url(signature)}`;
 }
 
+// Node's fetch throws a bare "fetch failed"; the real reason (DNS, ECONNREFUSED, TLS...) is in err.cause.
+export function describeCauseChain(err) {
+  const parts = [];
+  for (let cause = err.cause; cause; cause = cause.cause) {
+    const code = cause.code ? `${cause.code}: ` : '';
+    parts.push(`${code}${cause.message ?? cause}`);
+  }
+  return parts.join(' <- ');
+}
+
+async function fetchWithContext(fetchImpl, url, init) {
+  try {
+    return await fetchImpl(url, init);
+  } catch (err) {
+    const cause = describeCauseChain(err);
+    const host = new URL(url).host;
+    throw new Error(`request to ${host} failed: ${err.message}${cause ? ` (${cause})` : ''}`, { cause: err });
+  }
+}
+
 export async function getAccessToken(serviceAccount, { fetchImpl = fetch } = {}) {
   const jwt = signJwt(serviceAccount);
-  const res = await fetchImpl('https://oauth2.googleapis.com/token', {
+  const res = await fetchWithContext(fetchImpl, 'https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -88,7 +108,7 @@ export async function appendRow(row, config, serviceAccount, { fetchImpl = fetch
   const accessToken = await getAccessToken(serviceAccount, { fetchImpl });
   const range = encodeURIComponent(`${config.sheetName}!A1`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`;
-  const res = await fetchImpl(url, {
+  const res = await fetchWithContext(fetchImpl, url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
