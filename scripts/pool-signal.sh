@@ -12,7 +12,7 @@
 # JSON: pure filesystem. Stays N-agnostic.
 #
 # Usage:
-#   pool-signal.sh emit <coord_dir> <label> <stage>
+#   pool-signal.sh emit <coord_dir> <label> <stage>  # impl needs a commit since plan.merged
 #   pool-signal.sh merged <coord_dir>
 #   pool-signal.sh wait <coord_dir> <stage>          # block until ALL labels done
 #   pool-signal.sh wait-one <coord_dir> <signal>     # block until one sentinel exists
@@ -40,9 +40,23 @@ labels_of() {
   [ -n "$found" ] || die "no worker subdirs in $coord"
 }
 
+# impl means "implementation committed": require at least one commit on the worker's
+# branch made after plan.merged (when workers were released to implement). Workers
+# have no base branch to diff against, so plan.merged's mtime is the cut-off.
+require_commit_since_merged() {
+  local coord="$1" worktree="$2"
+  local merged="$coord/plan.merged"
+  [ -f "$merged" ] || die "missing $merged — impl can only follow the reviewed plan"
+  local commit
+  commit="$(git -C "$worktree" log -1 --format=%h --since="@$(stat -c %Y "$merged")")" \
+    || die "git log failed in $worktree"
+  [ -n "$commit" ] || die "no commits in $worktree since plan.merged — commit the implementation before emitting impl"
+}
+
 cmd_emit() {
   local coord="${1:-}" label="${2:-}" stage="${3:-}"
   [ -n "$coord" ] && [ -n "$label" ] && [ -n "$stage" ] || die "usage: emit <coord_dir> <label> <stage>"
+  [ "$stage" != impl ] || require_commit_since_merged "$coord" "$coord/$label"
   : > "$coord/$label.$stage.done"
   echo "pool-signal: emitted $label.$stage.done"
 }

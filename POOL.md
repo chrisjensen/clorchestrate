@@ -44,7 +44,8 @@ payload, so nothing to malform or collide on; files never clash with worktree su
 Everything sits in the run dir, so it dies with the run — no extra cleanup.
 
 - `pool-signal.sh emit <coord_dir> <label> <stage>` — worker signals `plan` / `impl`
-  done.
+  done. `impl` refuses unless the worker's branch has a commit made after
+  `plan.merged`.
 - `pool-signal.sh merged <coord_dir>` — coordinator releases the workers to implement.
 - `pool-signal.sh wait <coord_dir> <stage>` — block until **every** label's `<stage>`
   signal exists (labels = the run dir's subdirs).

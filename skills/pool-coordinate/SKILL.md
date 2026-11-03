@@ -24,6 +24,8 @@ No manifest — drive everything off the subdir list. N-agnostic.
    approaches, risks, things dropped from a worker's plan). Only once the user approves, release the workers:
    `pool-signal.sh merged .`.
 4. **Wait for all implementations:** `pool-signal.sh wait . impl`.
+   Each `impl` signal means that worker has committed its implementation and run
+   `/quality-all` — review the committed branch as-is.
 
 Both waits already block until their sentinels exist — once backgrounded, don't poll
 them with `sleep` or repeated checks (a standalone `sleep` is blocked by the harness

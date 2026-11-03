@@ -20,11 +20,15 @@ it, on your own branch). Coordinate through files in the run dir; `pool-signal.s
    ```
    pool-signal.sh wait-one <run> plan.merged
    ```
-3. Implement `<run>/PLAN.hybrid.md` (the reviewed plan, not your own). Commit on your
-   branch when done:
-   ```
-   pool-signal.sh emit <run> <label> impl
-   ```
+3. Implement `<run>/PLAN.hybrid.md` (the reviewed plan, not your own), then, in order:
+   1. Commit on your branch with `/source-commit` (write and run `commit.sh`).
+   2. Run `/quality-all` and resolve what it finds; commit those fixes the same way.
+   3. Only once `/quality-all` passes and everything is committed, signal:
+      ```
+      pool-signal.sh emit <run> <label> impl
+      ```
+   The coordinator compares implementations as they stand at the signal. `emit impl`
+   refuses if your branch has no commit since `plan.merged`.
 
 Interactive session — resolve any prompts/errors in this tab. There are no failure
 signals.
