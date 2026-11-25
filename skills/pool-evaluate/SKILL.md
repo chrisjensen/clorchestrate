@@ -26,7 +26,10 @@ For each label:
    each label's `%` is its own feature count divided by that union's count, as a
    percentage. eg 90
 3. Run `pool-signal.sh durations . <label>` for the `planDurationSeconds` and
-   `implDurationSeconds`.
+   `implDurationSeconds`. Durations are optional: if the command fails, or a value
+   is negative or implausible (the run dir was reused for follow-up work, so the
+   sentinel timestamps no longer describe one run), omit both fields from the row
+   rather than guessing or writing `0`.
 4. Judge `correct` from `<label>/PLAN.md` and `git -C <label> diff origin/<base>...HEAD`:
    `true` only if the worker's plan was a correct solution for the task **and** the
    implementation faithfully implements that plan. Independent of selection — a
@@ -42,5 +45,7 @@ For each label:
      "implFeaturesPct":NN,"implDurationSeconds":NN,"correct":true,"selected":true}' \
      | pool-sheet-append.mjs
    ```
+   `pool-sheet-append.mjs` calls the Google Sheets API, so run it outside the
+   sandbox from the start.
 
 The worktrees and run dir are the spawn layer's to clean up.

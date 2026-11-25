@@ -33,9 +33,15 @@ const ROW_FIELDS = [
   'selected',
 ];
 
+// Durations come from sentinel mtimes, which stop being meaningful once a run dir is
+// reused for follow-up work — so they may be omitted, leaving the cell empty.
+const OPTIONAL_ROW_FIELDS = ['planDurationSeconds', 'implDurationSeconds'];
+
+const isMissing = (value) => value === undefined || value === null;
+
 export function validateRow(row) {
   for (const field of ROW_FIELDS) {
-    if (row[field] === undefined || row[field] === null) {
+    if (isMissing(row[field]) && !OPTIONAL_ROW_FIELDS.includes(field)) {
       throw new Error(`row is missing required field "${field}"`);
     }
   }
@@ -43,7 +49,7 @@ export function validateRow(row) {
 
 export function buildRowArray(row) {
   validateRow(row);
-  return ROW_FIELDS.map((field) => row[field]);
+  return ROW_FIELDS.map((field) => (isMissing(row[field]) ? '' : row[field]));
 }
 
 function base64url(input) {

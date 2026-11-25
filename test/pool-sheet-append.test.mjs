@@ -43,9 +43,16 @@ describe('pool-sheet-append.mjs', () => {
     ]);
   });
 
-  test('validateRow throws on a missing field', () => {
-    const { implDurationSeconds, ...incomplete } = ROW;
-    assert.throws(() => validateRow(incomplete), /implDurationSeconds/);
+  test('validateRow throws on a missing required field', () => {
+    const { implFeatures, ...incomplete } = ROW;
+    assert.throws(() => validateRow(incomplete), /implFeatures/);
+  });
+
+  test('buildRowArray leaves omitted durations as empty cells', () => {
+    const { planDurationSeconds, implDurationSeconds, ...withoutDurations } = ROW;
+    const cells = buildRowArray(withoutDurations);
+    assert.equal(cells[5], '');
+    assert.equal(cells[8], '');
   });
 
   test('appendRow exchanges a token then posts the row, using the stubbed fetch', async () => {
