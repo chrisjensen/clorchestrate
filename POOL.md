@@ -37,7 +37,8 @@ sentinels are files, so they never clash with worktree dirs). A worker's label i
 `basename "$PWD"`; its branch is
 `git -C <label> rev-parse --abbrev-ref HEAD`. The only value the spawn layer must supply
 that isn't on disk is the PR **base** branch — passed as the `/pool-coordinate <base>`
-argument. Everything is N-agnostic; nothing is hardcoded.
+argument, and named in each worker's launch prompt so it can rebase onto it before
+implementing. Everything is N-agnostic; nothing is hardcoded.
 
 **Signals** are bare sentinel files in `<run-dir>` itself — existence means "done" (no
 payload, so nothing to malform or collide on; files never clash with worktree subdirs).

@@ -15,11 +15,15 @@ No manifest — drive everything off the subdir list. N-agnostic.
 
 1. **Wait for all plans** (backgrounded via `run_in_background`):
    `pool-signal.sh wait . plan`.
-2. **Merge.** First list every requirement. Read each `<label>/PLAN.md`, check it
+2. **Merge.** First list every requirement. Read each `<label>/PLAN.md` in full
+   with the Read tool (see "Reading plans in full" below), check it
    against that list (covered, partial, missing, or unrequested extras), synthesize
    the strongest hybrid with `/plan-review`, and write it to `PLAN.hybrid.md`.
-3. **Get approval before releasing workers.** Summarize for the user: the key
-   decisions made while merging, the final `PLAN.hybrid.md`, and anything else
+3. **Get approval before releasing workers.** Summarize for the user, who has not
+   read the workers' plans — describe the merged plan on its own terms (what will
+   change and why), not as a diff against plans they haven't seen: the key
+   decisions made while merging, any diverging plans made by other workers and
+   why particular approaches were selecteed, the final `PLAN.hybrid.md`, and anything else
    worth flagging (any requirement `PLAN.hybrid.md` leaves uncovered, conflicting
    approaches, risks, things dropped from a worker's plan). Only once the user approves, release the workers:
    `pool-signal.sh merged .`.
@@ -32,9 +36,18 @@ them with `sleep` or repeated checks (a standalone `sleep` is blocked by the har
 anyway); the session resumes when the backgrounded command completes. To check interim
 progress, read the backgrounded task's own output instead.
 
+**Reading plans in full.** Tool output may reach you compressed by the headroom
+proxy, marked like `[120 items compressed to 94 (from 3 source lines). Retrieve
+more: hash=<hash>]`. Whenever a
+plan (or diff) carries such a marker, or reads as garbled, truncated or missing
+words, call `mcp__headroom__headroom_retrieve` with the hash to get the original
+before using it. Never report a plan as corrupt, garbled or damaged, and never fill
+gaps "from intent", without having retrieved the original first.
+
 5. **Review + promote.** For each worker, review `git -C <label> diff
    origin/<base>...HEAD` against the requirements list, and with `/feature-merge` +
-   git-diff-reviewer. Pick the single best implementation (requirement coverage
+   git-diff-reviewer. Read `<label>/VERIFY.md` for what the worker verified on the
+   real surface (or marked `NOT REPRODUCED`). Pick the single best implementation (requirement coverage
    first), and identify any features from the other worktrees worth folding in.
    Present the merge plan to the user for approval **before** merging any worktree or
    opening a PR. On approval, open the PR from the winning branch with `/pr`.

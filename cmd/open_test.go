@@ -240,10 +240,10 @@ func TestBuildFollowupCmd(t *testing.T) {
 }
 
 func TestPoolLaunchPrompt(t *testing.T) {
-	if got := poolLaunchPrompt(poolRoleWorker, "Implement issue #42.", ""); got != "Implement issue #42.\n\nUse the pool-worker skill to implement this task." {
+	if got := poolLaunchPrompt(poolRoleWorker, "Implement issue #42.", "main"); got != "Implement issue #42.\n\nUse the pool-worker skill to implement this task, with base branch main." {
 		t.Errorf("worker with task body: got %q", got)
 	}
-	if got := poolLaunchPrompt(poolRoleWorker, "", ""); got != "Use the pool-worker skill to implement this task." {
+	if got := poolLaunchPrompt(poolRoleWorker, "", "main"); got != "Use the pool-worker skill to implement this task, with base branch main." {
 		t.Errorf("worker with no task body: got %q", got)
 	}
 	if got := poolLaunchPrompt(poolRoleCoordinator, "Review against issue #42.", "main"); got != "Review against issue #42.\n\nUse the pool-coordinate skill, with PR base branch main." {

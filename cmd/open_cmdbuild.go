@@ -9,14 +9,15 @@ import (
 
 // poolLaunchPrompt builds a pool session's initial Claude prompt. A worker's
 // prompt is its task body (so the chat history shows what it was asked to do)
-// plus an instruction to work it via the pool-worker skill; the coordinator's
-// task body is its requirements and review instructions, plus an instruction
-// to run the pool-coordinate skill against coordinatorBase.
-func poolLaunchPrompt(role poolRole, taskBody, coordinatorBase string) string {
+// plus an instruction to work it via the pool-worker skill, rebasing onto
+// base before implementing; the coordinator's task body is its requirements
+// and review instructions, plus an instruction to run the pool-coordinate
+// skill against base. base is the PR target branch.
+func poolLaunchPrompt(role poolRole, taskBody, base string) string {
 	if role == poolRoleCoordinator {
-		return taskBody + "\n\nUse the pool-coordinate skill, with PR base branch " + coordinatorBase + "."
+		return taskBody + "\n\nUse the pool-coordinate skill, with PR base branch " + base + "."
 	}
-	prompt := "Use the pool-worker skill to implement this task."
+	prompt := "Use the pool-worker skill to implement this task, with base branch " + base + "."
 	if taskBody != "" {
 		prompt = taskBody + "\n\n" + prompt
 	}
