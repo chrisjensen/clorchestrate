@@ -29,7 +29,8 @@ No manifest — drive everything off the subdir list. N-agnostic.
    `pool-signal.sh merged .`.
 4. **Wait for all implementations:** `pool-signal.sh wait . impl`.
    Each `impl` signal means that worker has committed its implementation and run
-   `/quality-all` — review the committed branch as-is.
+   `/quality-all` — review the committed branch as-is. Treat `/quality-all` as the
+   worker's claim (CI re-runs the gates), not a substitute for reading the code.
 
 Both waits already block until their sentinels exist — once backgrounded, don't poll
 them with `sleep` or repeated checks (a standalone `sleep` is blocked by the harness
@@ -44,13 +45,30 @@ words, call `mcp__headroom__headroom_retrieve` with the hash to get the original
 before using it. Never report a plan as corrupt, garbled or damaged, and never fill
 gaps "from intent", without having retrieved the original first.
 
-5. **Review + promote.** For each worker, review `git -C <label> diff
-   origin/<base>...HEAD` against the requirements list, and with `/feature-merge` +
-   git-diff-reviewer. Read `<label>/VERIFY.md` for what the worker verified on the
-   real surface (or marked `NOT REPRODUCED`). Pick the single best implementation (requirement coverage
-   first), and identify any features from the other worktrees worth folding in.
-   Present the merge plan to the user for approval **before** merging any worktree or
-   opening a PR. On approval, open the PR from the winning branch with `/pr`.
+5. **Review + promote.** Do not decide before reading the code. For each worker, in
+   parallel:
+   a. **Read the full diff**, every changed file end to end
+      (`git -C <label> diff origin/<base>...HEAD`) — not diffstat, not greps.
+      Diffstat and greps locate; they do not evaluate.
+   b. **Spawn a git-diff-reviewer agent** per worker (one message, concurrent) for a
+      code-level review.
+   c. **Read `<label>/VERIFY.md`** for what the worker verified on the real surface
+      (or marked `NOT REPRODUCED`).
+   Do **not** re-run typecheck/lint/contract gates — the workers run them and CI
+   re-runs them; that is sufficient. Then score each worker on, in order:
+   (1) **requirement coverage** — every item on the step-2 list, flagging anything
+   unaddressed; (2) **correctness** — real bugs, auth/validation parity, drift
+   surfaces, each with `file:line` evidence; (3) **convention & DRY alignment** —
+   does it follow the codebase's documented patterns (CLAUDE.md / CONVENTIONS.md) or
+   leave duplication / parallel sources; (4) **test quality** — happy path plus the
+   one negative test that covers the migration's real risk. A larger diff is not
+   worse by default — judge from the code whether extra work is *completeness*
+   (finishing the convention, removing duplication) or *scope creep* (unrelated
+   churn). Pick the single best (coverage first; use 2–4 as evidence-based
+   tiebreaks), identify features from the other worktrees worth folding in, and
+   present the decision with its `file:line` evidence to the user for approval
+   **before** merging any worktree or opening a PR. On approval, promote with
+   `/feature-merge` and open the PR from the winning branch with `/pr`.
 6. **Evaluate.** Once promoted, invoke `/pool-evaluate <base> <selected-label>`
    (`<selected-label>` is the winning worker from step 5) to record per-model
    performance.
